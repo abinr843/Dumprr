@@ -1,0 +1,12 @@
+[project]
+id = "your-project-id"
+name = "DUMPR"
+
+[api]
+port = 54321
+
+[db]
+port = 54322
+
+[studio]
+port = 54323

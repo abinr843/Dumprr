@@ -1,0 +1,21 @@
+-- ============================================================
+-- DUMPR — Seed Admin Account
+-- File: supabase/seed_admin.sql
+-- ============================================================
+-- This script is idempotent — safe to run multiple times.
+-- It creates the root administrator in auth.users and profiles.
+--
+-- ⚠️  For use in the Supabase SQL Editor or via the CLI seed script.
+--     In production, use scripts/seed-admin.ts with the Service Role key.
+-- ============================================================
+
+-- NOTE: This SQL file is provided as a reference. The actual admin
+-- seeding should be done via the TypeScript CLI script (scripts/seed-admin.ts)
+-- which uses Supabase's auth.admin.createUser() API for proper password
+-- hashing and auth provider setup.
+--
+-- Default admin email: abinrphilip34@gmail.com
+-- Default admin role: superadmin
+--
+-- Run the CLI seeder instead:
+--   npm run seed:admin
