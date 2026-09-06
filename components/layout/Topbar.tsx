@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Search, Bell, Plus, User, LogOut, Shield } from "lucide-react";
+import { Search, Bell, Plus, User, LogOut, Shield, UploadCloud, FileText as FileTextIcon } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { logoutAction } from "@/app/actions/auth";
 import { SearchModal } from "@/components/search/SearchModal";
+import { AdminUploadZone } from "@/components/storage/AdminUploadZone";
+import { PostEditorModal } from "@/components/posts/PostEditorModal";
 import { isAdmin } from "@/lib/auth/roles";
 import type { UserRole } from "@/types/database.types";
+
 
 interface TopbarProps {
   sidebarCollapsed: boolean;
@@ -17,17 +20,27 @@ interface TopbarProps {
 export function Topbar({ sidebarCollapsed, userEmail, userRole }: TopbarProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [postEditorOpen, setPostEditorOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const adminMenuRef = useRef<HTMLDivElement>(null);
+  const userIsAdmin = userRole ? isAdmin(userRole as UserRole) : false;
+
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setShowMenu(false);
       }
+      if (adminMenuRef.current && !adminMenuRef.current.contains(e.target as Node)) {
+        setAdminMenuOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
 
   useEffect(() => {
     function handleGlobalKeyDown(e: KeyboardEvent) {
@@ -84,17 +97,45 @@ export function Topbar({ sidebarCollapsed, userEmail, userRole }: TopbarProps) {
             <Search size={18} />
           </button>
 
-          {userRole && isAdmin(userRole as UserRole) && (
-            <button
-              type="button"
-              className="topbar-action-btn topbar-new-btn desktop-only"
-              aria-label="Create new"
-              title="Create new"
-            >
-              <Plus size={18} strokeWidth={2.2} />
-              <span className="topbar-new-label">New</span>
-            </button>
+          {userIsAdmin && (
+            <div className="topbar-admin-menu-wrapper desktop-only" ref={adminMenuRef}>
+              <button
+                type="button"
+                className="topbar-action-btn topbar-new-btn"
+                aria-label="Quick actions"
+                title="Quick actions"
+                onClick={() => setAdminMenuOpen((v) => !v)}
+                aria-expanded={adminMenuOpen}
+                aria-haspopup="menu"
+              >
+                <Plus size={17} strokeWidth={2.2} />
+                <span className="topbar-new-label">New</span>
+              </button>
+              {adminMenuOpen && (
+                <div className="admin-quick-dropdown" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="admin-quick-item"
+                    onClick={() => { setAdminMenuOpen(false); setUploadOpen(true); }}
+                  >
+                    <UploadCloud size={15} />
+                    Upload Files
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="admin-quick-item"
+                    onClick={() => { setAdminMenuOpen(false); setPostEditorOpen(true); }}
+                  >
+                    <FileTextIcon size={15} />
+                    New Post
+                  </button>
+                </div>
+              )}
+            </div>
           )}
+
 
           <button
             className="topbar-action-btn"
@@ -149,8 +190,44 @@ export function Topbar({ sidebarCollapsed, userEmail, userRole }: TopbarProps) {
       <SearchModal
         isOpen={searchOpen}
         onClose={() => setSearchOpen(false)}
-        isAdmin={userRole ? isAdmin(userRole as UserRole) : false}
+        isAdmin={userIsAdmin}
       />
+
+      {/* Admin Upload Modal */}
+      {uploadOpen && (
+        <>
+          <div
+            className="topbar-modal-backdrop"
+            onClick={() => setUploadOpen(false)}
+          />
+          <div className="topbar-modal" role="dialog" aria-modal="true" aria-label="Upload files">
+            <div className="topbar-modal-header">
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <UploadCloud size={20} style={{ color: "var(--color-primary)" }} />
+                <h2 style={{ fontSize: "var(--text-lg)", fontWeight: 700 }}>Upload Files</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUploadOpen(false)}
+                className="topbar-modal-close"
+                aria-label="Close"
+              >✕</button>
+            </div>
+            <div className="topbar-modal-body">
+              <AdminUploadZone />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Post Editor Modal */}
+      {postEditorOpen && (
+        <PostEditorModal
+          post={null}
+          onClose={() => setPostEditorOpen(false)}
+          onSaved={() => setPostEditorOpen(false)}
+        />
+      )}
 
       <style jsx>{`
         .topbar {
@@ -322,6 +399,112 @@ export function Topbar({ sidebarCollapsed, userEmail, userRole }: TopbarProps) {
           z-index: var(--z-dropdown);
           overflow: hidden;
           animation: dropdown-enter 0.15s ease-out;
+        }
+        .topbar-admin-menu-wrapper {
+          position: relative;
+        }
+        .admin-quick-dropdown {
+          position: absolute;
+          top: calc(100% + var(--space-2));
+          right: 0;
+          min-width: 170px;
+          background: var(--bg-surface);
+          border: 1px solid var(--border-default);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-lg);
+          z-index: var(--z-dropdown);
+          padding: var(--space-1);
+          animation: dropdown-enter 0.15s ease-out;
+        }
+        .admin-quick-item {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          width: 100%;
+          padding: var(--space-2) var(--space-3);
+          font-size: var(--text-sm);
+          font-weight: var(--font-medium);
+          color: var(--text-primary);
+          background: none;
+          border: none;
+          border-radius: var(--radius-md);
+          cursor: pointer;
+          transition: background var(--transition-fast), color var(--transition-fast);
+          font-family: inherit;
+          text-align: left;
+        }
+        .admin-quick-item:hover {
+          background: var(--bg-hover);
+          color: var(--color-primary);
+        }
+        .topbar-modal-backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.55);
+          backdrop-filter: blur(4px);
+          -webkit-backdrop-filter: blur(4px);
+          z-index: var(--z-modal);
+          animation: fade-in 0.15s ease;
+        }
+        .topbar-modal {
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: min(640px, calc(100vw - 32px));
+          max-height: calc(100vh - 48px);
+          background: var(--bg-surface);
+          border: 1px solid var(--border-default);
+          border-radius: var(--radius-xl);
+          box-shadow: var(--shadow-xl);
+          z-index: calc(var(--z-modal) + 1);
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          animation: modal-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes modal-enter {
+          from {
+            opacity: 0;
+            transform: translate(-50%, -46%) scale(0.97);
+          }
+          to {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+          }
+        }
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .topbar-modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: var(--space-4) var(--space-6);
+          border-bottom: 1px solid var(--border-subtle);
+        }
+        .topbar-modal-close {
+          background: none;
+          border: none;
+          font-size: 16px;
+          color: var(--text-tertiary);
+          cursor: pointer;
+          width: 32px;
+          height: 32px;
+          border-radius: var(--radius-md);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background var(--transition-fast), color var(--transition-fast);
+        }
+        .topbar-modal-close:hover {
+          background: var(--bg-hover);
+          color: var(--text-primary);
+        }
+        .topbar-modal-body {
+          padding: var(--space-6);
+          overflow-y: auto;
         }
         @keyframes dropdown-enter {
           from {

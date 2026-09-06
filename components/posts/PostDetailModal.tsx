@@ -346,6 +346,23 @@ export function PostDetailModal({
           padding: 2px 8px;
           border-radius: var(--radius-full, 9999px);
         }
+
+        @media (max-width: 640px) {
+          .detail-modal {
+            width: calc(100vw - 20px);
+            max-height: 92dvh;
+          }
+          .detail-header {
+            padding: var(--space-3) var(--space-4);
+          }
+          .detail-content {
+            padding: var(--space-4);
+            gap: var(--space-3);
+          }
+          .detail-title {
+            font-size: var(--text-lg);
+          }
+        }
       `}</style>
     </>
   );

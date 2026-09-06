@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { ActionContextMenu } from "./ActionContextMenu";
 import {
   FileText,
   Image as ImageIcon,
@@ -143,8 +144,9 @@ export function FilesManager({ initialFiles, isAdmin }: FilesManagerProps) {
     name: string;
   } | null>(null);
 
-  // File context menu
+  // Context menus
   const [fileMenuId, setFileMenuId] = useState<string | null>(null);
+  const [folderMenuId, setFolderMenuId] = useState<string | null>(null);
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
 
   // ─── Data Loading ─────────────────────────────────────────────────
@@ -775,6 +777,40 @@ export function FilesManager({ initialFiles, isAdmin }: FilesManagerProps) {
                             >
                               <ChevronRight size={16} />
                             </button>
+
+                            {isAdmin && (
+                              <FolderMenuTrigger
+                                folder={folder}
+                                folderMenuId={folderMenuId}
+                                setFolderMenuId={setFolderMenuId}
+                                onRename={() => {
+                                  setFolderMenuId(null);
+                                  setRenameTarget({
+                                    type: "folder",
+                                    id: folder.id,
+                                    name: folder.name,
+                                  });
+                                }}
+                                onMove={() => {
+                                  setFolderMenuId(null);
+                                  setMoveTarget({
+                                    type: "folder",
+                                    id: folder.id,
+                                    name: folder.name,
+                                    parentId: folder.parent_id,
+                                  });
+                                }}
+                                onDelete={() => {
+                                  setFolderMenuId(null);
+                                  setDeleteTarget({
+                                    type: "folder",
+                                    id: folder.id,
+                                    name: folder.name,
+                                  });
+                                }}
+                                buttonClassName="list-action-btn"
+                              />
+                            )}
                           </div>
                         </div>
                       );
@@ -845,55 +881,40 @@ export function FilesManager({ initialFiles, isAdmin }: FilesManagerProps) {
                             </a>
 
                             {isAdmin && (
-                              <div style={{ position: "relative" }}>
-                                <button
-                                  type="button"
-                                  className="list-action-btn"
-                                  onClick={() =>
-                                    setFileMenuId(
-                                      fileMenuId === file.id ? null : file.id
-                                    )
-                                  }
-                                  aria-label="File actions"
-                                >
-                                  <MoreVertical size={14} />
-                                </button>
-
-                                {fileMenuId === file.id && (
-                                  <FileActionMenu
-                                    file={file}
-                                    onClose={() => setFileMenuId(null)}
-                                    onRename={() => {
-                                      setFileMenuId(null);
-                                      setRenameTarget({
-                                        type: "file",
-                                        id: file.id,
-                                        name:
-                                          file.display_name || file.name,
-                                      });
-                                    }}
-                                    onMove={() => {
-                                      setFileMenuId(null);
-                                      setMoveTarget({
-                                        type: "file",
-                                        id: file.id,
-                                        name:
-                                          file.display_name || file.name,
-                                        parentId: file.folder_id,
-                                      });
-                                    }}
-                                    onDelete={() => {
-                                      setFileMenuId(null);
-                                      setDeleteTarget({
-                                        type: "file",
-                                        id: file.id,
-                                        name:
-                                          file.display_name || file.name,
-                                      });
-                                    }}
-                                  />
-                                )}
-                              </div>
+                              <FileMenuTrigger
+                                file={file}
+                                fileMenuId={fileMenuId}
+                                setFileMenuId={setFileMenuId}
+                                onRename={() => {
+                                  setFileMenuId(null);
+                                  setRenameTarget({
+                                    type: "file",
+                                    id: file.id,
+                                    name:
+                                      file.display_name || file.name,
+                                  });
+                                }}
+                                onMove={() => {
+                                  setFileMenuId(null);
+                                  setMoveTarget({
+                                    type: "file",
+                                    id: file.id,
+                                    name:
+                                      file.display_name || file.name,
+                                    parentId: file.folder_id,
+                                  });
+                                }}
+                                onDelete={() => {
+                                  setFileMenuId(null);
+                                  setDeleteTarget({
+                                    type: "file",
+                                    id: file.id,
+                                    name:
+                                      file.display_name || file.name,
+                                  });
+                                }}
+                                buttonClassName="list-action-btn"
+                              />
                             )}
                           </div>
                         </div>
@@ -914,7 +935,7 @@ export function FilesManager({ initialFiles, isAdmin }: FilesManagerProps) {
                       style={{
                         display: "grid",
                         gridTemplateColumns:
-                          "repeat(auto-fill, minmax(240px, 1fr))",
+                          "repeat(auto-fill, minmax(min(100%, 220px), 1fr))",
                         gap: "var(--space-3)",
                       }}
                     >
@@ -957,7 +978,7 @@ export function FilesManager({ initialFiles, isAdmin }: FilesManagerProps) {
                       style={{
                         display: "grid",
                         gridTemplateColumns:
-                          "repeat(auto-fill, minmax(280px, 1fr))",
+                          "repeat(auto-fill, minmax(min(100%, 260px), 1fr))",
                         gap: "var(--space-4)",
                       }}
                     >
@@ -1063,76 +1084,45 @@ export function FilesManager({ initialFiles, isAdmin }: FilesManagerProps) {
 
                             {/* Admin file action menu */}
                             {isAdmin && (
-                              <div
-                                style={{
-                                  position: "relative",
-                                  flexShrink: 0,
+                              <FileMenuTrigger
+                                file={file}
+                                fileMenuId={fileMenuId}
+                                setFileMenuId={setFileMenuId}
+                                onRename={() => {
+                                  setFileMenuId(null);
+                                  setRenameTarget({
+                                    type: "file",
+                                    id: file.id,
+                                    name:
+                                      file.display_name || file.name,
+                                  });
                                 }}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setFileMenuId(
-                                      fileMenuId === file.id
-                                        ? null
-                                        : file.id
-                                    );
-                                  }}
-                                  style={{
-                                    padding: "4px",
-                                    borderRadius: "var(--radius-sm)",
-                                    color: "var(--text-muted)",
-                                    transition: "background 0.15s ease",
-                                  }}
-                                  onMouseEnter={(e) =>
-                                    (e.currentTarget.style.backgroundColor =
-                                      "rgba(99,102,241,0.1)")
-                                  }
-                                  onMouseLeave={(e) =>
-                                    (e.currentTarget.style.backgroundColor =
-                                      "transparent")
-                                  }
-                                  aria-label="File actions"
-                                >
-                                  <MoreVertical size={14} />
-                                </button>
-
-                                {fileMenuId === file.id && (
-                                  <FileActionMenu
-                                    file={file}
-                                    onClose={() => setFileMenuId(null)}
-                                    onRename={() => {
-                                      setFileMenuId(null);
-                                      setRenameTarget({
-                                        type: "file",
-                                        id: file.id,
-                                        name:
-                                          file.display_name || file.name,
-                                      });
-                                    }}
-                                    onMove={() => {
-                                      setFileMenuId(null);
-                                      setMoveTarget({
-                                        type: "file",
-                                        id: file.id,
-                                        name:
-                                          file.display_name || file.name,
-                                        parentId: file.folder_id,
-                                      });
-                                    }}
-                                    onDelete={() => {
-                                      setFileMenuId(null);
-                                      setDeleteTarget({
-                                        type: "file",
-                                        id: file.id,
-                                        name:
-                                          file.display_name || file.name,
-                                      });
-                                    }}
-                                  />
-                                )}
-                              </div>
+                                onMove={() => {
+                                  setFileMenuId(null);
+                                  setMoveTarget({
+                                    type: "file",
+                                    id: file.id,
+                                    name:
+                                      file.display_name || file.name,
+                                    parentId: file.folder_id,
+                                  });
+                                }}
+                                onDelete={() => {
+                                  setFileMenuId(null);
+                                  setDeleteTarget({
+                                    type: "file",
+                                    id: file.id,
+                                    name:
+                                      file.display_name || file.name,
+                                  });
+                                }}
+                                buttonStyle={{
+                                  padding: "4px",
+                                  borderRadius: "var(--radius-sm)",
+                                  color: "var(--text-muted)",
+                                  transition: "background 0.15s ease",
+                                }}
+                              />
                             )}
                           </div>
 
@@ -1441,96 +1431,164 @@ export function FilesManager({ initialFiles, isAdmin }: FilesManagerProps) {
   );
 }
 
-// ─── File Action Menu ──────────────────────────────────────────────────
+// ─── File & Folder Context Menu Triggers ──────────────────────────────────────
 
-function FileActionMenu({
+function FileMenuTrigger({
   file,
-  onClose,
+  fileMenuId,
+  setFileMenuId,
   onRename,
   onMove,
   onDelete,
+  buttonClassName,
+  buttonStyle,
 }: {
   file: FileRow;
-  onClose: () => void;
+  fileMenuId: string | null;
+  setFileMenuId: React.Dispatch<React.SetStateAction<string | null>>;
   onRename: () => void;
   onMove: () => void;
   onDelete: () => void;
+  buttonClassName?: string;
+  buttonStyle?: React.CSSProperties;
 }) {
-  const menuRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
+  const btnRef = React.useRef<HTMLButtonElement>(null);
+  const isOpen = fileMenuId === file.id;
 
   return (
-    <div
-      ref={menuRef}
-      style={{
-        position: "absolute",
-        top: "100%",
-        right: 0,
-        zIndex: 50,
-        minWidth: "140px",
-        marginTop: "4px",
-        padding: "4px",
-        borderRadius: "var(--radius-md)",
-        backgroundColor: "var(--bg-elevated)",
-        border: "1px solid var(--border-subtle)",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-      }}
-    >
-      {[
-        { icon: <Pencil size={13} />, label: "Rename", action: onRename },
-        {
-          icon: <ArrowRightLeft size={13} />,
-          label: "Move",
-          action: onMove,
-        },
-        {
-          icon: <Trash2 size={13} />,
-          label: "Delete",
-          action: onDelete,
-          danger: true,
-        },
-      ].map((item) => (
-        <button
-          key={item.label}
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            item.action();
-          }}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            width: "100%",
-            padding: "7px 10px",
-            borderRadius: "var(--radius-sm)",
-            fontSize: "var(--text-xs)",
-            color: (item as any).danger
-              ? "var(--color-danger)"
-              : "var(--text-primary)",
-            transition: "background 0.1s ease",
-            textAlign: "left",
-          }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.backgroundColor = "var(--bg-input)")
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        className={buttonClassName}
+        onClick={(e) => {
+          e.stopPropagation();
+          setFileMenuId(isOpen ? null : file.id);
+        }}
+        aria-label="File actions"
+        aria-expanded={isOpen}
+        style={buttonStyle}
+        onMouseEnter={(e) => {
+          if (!buttonClassName) {
+            e.currentTarget.style.backgroundColor = "rgba(99,102,241,0.1)";
           }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.backgroundColor = "transparent")
+        }}
+        onMouseLeave={(e) => {
+          if (!buttonClassName) {
+            e.currentTarget.style.backgroundColor = "transparent";
           }
-        >
-          {item.icon}
-          <span>{item.label}</span>
-        </button>
-      ))}
-    </div>
+        }}
+      >
+        <MoreVertical size={16} />
+      </button>
+
+      <ActionContextMenu
+        isOpen={isOpen}
+        onClose={() => setFileMenuId(null)}
+        triggerRef={btnRef}
+        title={file.display_name || file.name}
+        subtitle={formatBytes(file.size_bytes)}
+        icon={getFileIcon(file.name)}
+        items={[
+          {
+            icon: <Pencil size={15} />,
+            label: "Rename",
+            action: onRename,
+          },
+          {
+            icon: <ArrowRightLeft size={15} />,
+            label: "Move",
+            action: onMove,
+          },
+          {
+            icon: <Trash2 size={15} />,
+            label: "Move to Trash",
+            action: onDelete,
+            danger: true,
+          },
+        ]}
+      />
+    </>
+  );
+}
+
+function FolderMenuTrigger({
+  folder,
+  folderMenuId,
+  setFolderMenuId,
+  onRename,
+  onMove,
+  onDelete,
+  buttonClassName,
+  buttonStyle,
+}: {
+  folder: FolderWithStats;
+  folderMenuId: string | null;
+  setFolderMenuId: React.Dispatch<React.SetStateAction<string | null>>;
+  onRename: () => void;
+  onMove: () => void;
+  onDelete: () => void;
+  buttonClassName?: string;
+  buttonStyle?: React.CSSProperties;
+}) {
+  const btnRef = React.useRef<HTMLButtonElement>(null);
+  const isOpen = folderMenuId === folder.id;
+  const folderColor = folder.color || "#6366f1";
+  const totalItems = (folder.childFolderCount ?? 0) + (folder.childFileCount ?? 0);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        className={buttonClassName}
+        onClick={(e) => {
+          e.stopPropagation();
+          setFolderMenuId(isOpen ? null : folder.id);
+        }}
+        aria-label="Folder actions"
+        aria-expanded={isOpen}
+        style={buttonStyle}
+        onMouseEnter={(e) => {
+          if (!buttonClassName) {
+            e.currentTarget.style.backgroundColor = "rgba(99,102,241,0.1)";
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!buttonClassName) {
+            e.currentTarget.style.backgroundColor = "transparent";
+          }
+        }}
+      >
+        <MoreVertical size={16} />
+      </button>
+
+      <ActionContextMenu
+        isOpen={isOpen}
+        onClose={() => setFolderMenuId(null)}
+        triggerRef={btnRef}
+        title={folder.name}
+        subtitle={`${totalItems} item${totalItems !== 1 ? "s" : ""}`}
+        icon={<FolderOpen size={18} style={{ color: folderColor }} />}
+        items={[
+          {
+            icon: <Pencil size={15} />,
+            label: "Rename",
+            action: onRename,
+          },
+          {
+            icon: <ArrowRightLeft size={15} />,
+            label: "Move",
+            action: onMove,
+          },
+          {
+            icon: <Trash2 size={15} />,
+            label: "Move to Trash",
+            action: onDelete,
+            danger: true,
+          },
+        ]}
+      />
+    </>
   );
 }

@@ -19,28 +19,26 @@ import {
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 
+
 interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
-  adminOnly?: boolean;
 }
 
-const NAV_ITEMS: NavItem[] = [
+const ADMIN_NAV_ITEMS: NavItem[] = [
+  { href: "/admin", label: "Admin Panel", icon: Shield },
+  { href: "/audit-logs", label: "Audit Logs", icon: ShieldCheck },
+];
+
+const MAIN_NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/files", label: "Files", icon: FolderOpen },
   { href: "/posts", label: "Posts", icon: FileText },
   { href: "/recent", label: "Recent", icon: Clock },
-  { href: "/audit-logs", label: "Audit Logs", icon: ShieldCheck, adminOnly: true },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-const ADMIN_NAV: NavItem = {
-  href: "/admin",
-  label: "Admin Panel",
-  icon: Shield,
-  adminOnly: true,
-};
 
 interface SidebarProps {
   collapsed: boolean;
@@ -59,11 +57,6 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
   const totalGB = 5.0;
   const percent = (usedGB / totalGB) * 100;
 
-  // Build nav items — filter admin-only if not admin
-  const visibleItems = NAV_ITEMS.filter(
-    (item) => !item.adminOnly || isAdmin
-  );
-
   return (
     <>
       <aside className={`sidebar ${collapsed ? "sidebar-collapsed" : ""}`}>
@@ -77,30 +70,37 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
 
         {/* Navigation */}
         <nav className="sidebar-nav">
-          {/* Admin Panel Link */}
+          {/* Admin Panel & Audit Logs (visible only to admins) */}
           {isAdmin && (
             <>
-              <Link
-                href={ADMIN_NAV.href}
-                className={`sidebar-link sidebar-link-admin ${
-                  pathname.startsWith("/admin") ? "sidebar-link-active" : ""
-                }`}
-                title={collapsed ? ADMIN_NAV.label : undefined}
-              >
-                <ADMIN_NAV.icon
-                  size={20}
-                  strokeWidth={pathname.startsWith("/admin") ? 2.2 : 1.8}
-                />
-                {!collapsed && <span>{ADMIN_NAV.label}</span>}
-                {pathname.startsWith("/admin") && (
-                  <span className="sidebar-link-indicator" />
-                )}
-              </Link>
+              {ADMIN_NAV_ITEMS.map((item) => {
+                const isActive =
+                  pathname === item.href ||
+                  (item.href !== "/" && pathname.startsWith(item.href));
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`sidebar-link sidebar-link-admin ${
+                      isActive ? "sidebar-link-active" : ""
+                    }`}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    <item.icon
+                      size={20}
+                      strokeWidth={isActive ? 2.2 : 1.8}
+                    />
+                    {!collapsed && <span>{item.label}</span>}
+                    {isActive && <span className="sidebar-link-indicator" />}
+                  </Link>
+                );
+              })}
               <div className="nav-divider" />
             </>
           )}
 
-          {visibleItems.map((item) => {
+          {/* Main Navigation (Home, Files [both files and folders], Posts, Recent, Settings) */}
+          {MAIN_NAV_ITEMS.map((item) => {
             const isActive =
               pathname === item.href ||
               (item.href !== "/" && pathname.startsWith(item.href));
@@ -519,6 +519,25 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
           font-size: 11px;
         }
 
+        /* Admin Sub-links */
+        .sidebar-sub-link {
+          padding-left: calc(var(--space-3) + 18px);
+          font-size: calc(var(--text-sm) - 1px);
+          color: var(--text-muted);
+          opacity: 0.9;
+        }
+        .sidebar-collapsed .sidebar-sub-link {
+          padding-left: var(--space-3);
+        }
+        .sidebar-sub-link:hover {
+          color: hsl(280, 70%, 65%);
+          background: hsla(280, 70%, 60%, 0.08);
+        }
+        .sidebar-sub-link-active {
+          color: hsl(280, 80%, 60%) !important;
+          background: hsla(280, 70%, 60%, 0.1) !important;
+        }
+
         @media (max-width: 768px) {
           .sidebar {
             display: none;
@@ -528,3 +547,4 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
     </>
   );
 }
+

@@ -469,6 +469,27 @@ export function PostEditorModal({ post, onClose, onSaved }: PostEditorModalProps
         .spin {
           animation: spin 1s linear infinite;
         }
+
+        @media (max-width: 640px) {
+          .editor-modal {
+            width: calc(100vw - 20px);
+            max-height: 94dvh;
+          }
+          .editor-header {
+            padding: var(--space-3) var(--space-4);
+          }
+          .editor-body {
+            padding: var(--space-4);
+            gap: var(--space-3);
+          }
+          .form-row {
+            flex-direction: column;
+            gap: var(--space-3);
+          }
+          .editor-footer {
+            padding: var(--space-3) var(--space-4);
+          }
+        }
       `}</style>
     </>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useRef, useState } from "react";
 import {
   Folder,
   MoreVertical,
@@ -8,6 +8,7 @@ import {
   ArrowRightLeft,
   Trash2,
 } from "lucide-react";
+import { ActionContextMenu } from "./ActionContextMenu";
 import type { FolderWithStats } from "@/types/storage";
 
 interface FolderCardProps {
@@ -27,73 +28,71 @@ export function FolderCard({
   onMove,
   onDelete,
 }: FolderCardProps) {
-  const [menuOpen, setMenuOpen] = React.useState(false);
-  const menuRef = React.useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
 
   const folderColor = folder.color || "#6366f1";
   const totalItems =
     (folder.childFolderCount ?? 0) + (folder.childFileCount ?? 0);
 
-  // Close menu on outside click
-  React.useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    if (menuOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [menuOpen]);
-
   return (
     <div
+      onClick={() => onOpen(folder.id)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(folder.id);
+        }
+      }}
+      aria-label={`Open folder ${folder.name}`}
       style={{
         position: "relative",
-        display: "flex",
-        alignItems: "center",
-        gap: "var(--space-3)",
-        padding: "14px 16px",
+        padding: "var(--space-4)",
         borderRadius: "var(--radius-lg)",
         backgroundColor: "var(--bg-card)",
         backdropFilter: "blur(12px)",
         border: "1px solid var(--border-subtle)",
+        transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
         cursor: "pointer",
-        transition:
-          "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-2)",
       }}
-      onClick={() => onOpen(folder.id)}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = folderColor;
+        e.currentTarget.style.borderColor = "var(--border-strong)";
         e.currentTarget.style.transform = "translateY(-2px)";
-        e.currentTarget.style.boxShadow = `0 4px 16px ${folderColor}22`;
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.borderColor = "var(--border-subtle)";
         e.currentTarget.style.transform = "translateY(0)";
-        e.currentTarget.style.boxShadow = "none";
       }}
     >
-      {/* Folder Icon with colour accent */}
+      {/* Folder Header: Icon + Name */}
       <div
         style={{
-          width: "40px",
-          height: "40px",
-          borderRadius: "var(--radius-md)",
-          backgroundColor: `${folderColor}18`,
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
+          gap: "var(--space-3)",
         }}
       >
-        <Folder size={22} style={{ color: folderColor }} fill={`${folderColor}44`} />
-      </div>
+        <div
+          style={{
+            padding: "8px",
+            borderRadius: "var(--radius-md)",
+            backgroundColor: `${folderColor}15`,
+            color: folderColor,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <Folder size={22} />
+        </div>
 
-      {/* Name + Item count */}
-      <div style={{ flex: 1, overflow: "hidden" }}>
-        <h3
+        <span
           title={folder.name}
           style={{
             fontSize: "var(--text-sm)",
@@ -102,10 +101,22 @@ export function FolderCard({
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
+            flex: 1,
           }}
         >
           {folder.name}
-        </h3>
+        </span>
+      </div>
+
+      {/* Item Count & Action Menu */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginTop: "var(--space-1)",
+        }}
+      >
         <span
           style={{
             fontSize: "var(--text-xs)",
@@ -114,115 +125,70 @@ export function FolderCard({
         >
           {totalItems} item{totalItems !== 1 ? "s" : ""}
         </span>
-      </div>
 
-      {/* Admin Action Menu */}
-      {isAdmin && (
-        <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setMenuOpen((p) => !p);
-            }}
-            style={{
-              padding: "4px",
-              borderRadius: "var(--radius-sm)",
-              color: "var(--text-muted)",
-              transition: "background 0.15s ease",
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor =
-                "rgba(99, 102, 241, 0.1)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = "transparent")
-            }
-            aria-label="Folder actions"
-          >
-            <MoreVertical size={16} />
-          </button>
-
-          {menuOpen && (
-            <div
-              style={{
-                position: "absolute",
-                top: "100%",
-                right: 0,
-                zIndex: 50,
-                minWidth: "150px",
-                marginTop: "4px",
-                padding: "4px",
-                borderRadius: "var(--radius-md)",
-                backgroundColor: "var(--bg-elevated)",
-                border: "1px solid var(--border-subtle)",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+        {isAdmin && (
+          <div style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+            <button
+              ref={btnRef}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen((prev) => !prev);
               }}
+              style={{
+                width: "30px",
+                height: "30px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "var(--radius-sm)",
+                color: "var(--text-muted)",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                transition: "background 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "rgba(99, 102, 241, 0.1)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+              }}
+              aria-label="Folder actions"
+              aria-expanded={menuOpen}
             >
-              {[
+              <MoreVertical size={16} />
+            </button>
+
+            <ActionContextMenu
+              isOpen={menuOpen}
+              onClose={() => setMenuOpen(false)}
+              triggerRef={btnRef}
+              title={folder.name}
+              subtitle={`${totalItems} item${totalItems !== 1 ? "s" : ""}`}
+              icon={<Folder size={18} style={{ color: folderColor }} />}
+              items={[
                 {
-                  icon: <Pencil size={14} />,
+                  icon: <Pencil size={15} />,
                   label: "Rename",
-                  action: () => {
-                    setMenuOpen(false);
-                    onRename?.(folder);
-                  },
+                  action: () => onRename?.(folder),
                 },
                 {
-                  icon: <ArrowRightLeft size={14} />,
+                  icon: <ArrowRightLeft size={15} />,
                   label: "Move",
-                  action: () => {
-                    setMenuOpen(false);
-                    onMove?.(folder);
-                  },
+                  action: () => onMove?.(folder),
                 },
                 {
-                  icon: <Trash2 size={14} />,
-                  label: "Delete",
-                  action: () => {
-                    setMenuOpen(false);
-                    onDelete?.(folder);
-                  },
+                  icon: <Trash2 size={15} />,
+                  label: "Move to Trash",
+                  action: () => onDelete?.(folder),
                   danger: true,
                 },
-              ].map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    item.action();
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    width: "100%",
-                    padding: "8px 10px",
-                    borderRadius: "var(--radius-sm)",
-                    fontSize: "var(--text-sm)",
-                    color: item.danger
-                      ? "var(--color-danger)"
-                      : "var(--text-primary)",
-                    transition: "background 0.1s ease",
-                    textAlign: "left",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor =
-                      "var(--bg-input)")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor = "transparent")
-                  }
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              ]}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

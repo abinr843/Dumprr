@@ -254,7 +254,7 @@ export function ActivityFeed({
                             </span>
                             {item.uploaderName && (
                               <>
-                                <span className="meta-separator">•</span>
+                                <span className="meta-separator uploader-separator">•</span>
                                 <span className="meta-info uploader-text">
                                   by {item.uploaderName}
                                 </span>
@@ -266,7 +266,7 @@ export function ActivityFeed({
                             <span className="post-badge">ANNOUNCEMENT</span>
                             {item.authorName && (
                               <>
-                                <span className="meta-separator">•</span>
+                                <span className="meta-separator author-separator">•</span>
                                 <span className="meta-info author-text">
                                   by {item.authorName}
                                 </span>
@@ -540,12 +540,14 @@ export function ActivityFeed({
           display: flex;
           align-items: center;
           gap: var(--space-3);
-          padding: var(--space-3) var(--space-4);
+          padding: 10px 14px;
           background: var(--bg-card);
           border: 1px solid var(--border-subtle);
           border-radius: var(--radius-lg);
           transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
           cursor: pointer;
+          min-height: 60px;
+          overflow: hidden;
         }
         .feed-item:hover {
           transform: translateY(-1px);
@@ -573,13 +575,15 @@ export function ActivityFeed({
           min-width: 0;
           display: flex;
           flex-direction: column;
-          gap: 3px;
+          gap: 4px;
+          overflow: hidden;
         }
         .item-title-row {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: var(--space-2);
+          min-width: 0;
         }
         .item-title {
           font-size: var(--text-sm);
@@ -588,11 +592,13 @@ export function ActivityFeed({
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+          min-width: 0;
         }
         .item-time {
           font-size: 11px;
           color: var(--text-muted);
           flex-shrink: 0;
+          white-space: nowrap;
         }
         .item-meta-row {
           display: flex;
@@ -600,12 +606,22 @@ export function ActivityFeed({
           gap: 6px;
           font-size: var(--text-xs);
           color: var(--text-muted);
+          min-width: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          line-height: 1.4;
+        }
+        .meta-info {
+          white-space: nowrap;
+          flex-shrink: 0;
         }
         .file-badge, .post-badge {
           font-size: 10px;
           font-weight: 700;
           padding: 1px 5px;
           border-radius: var(--radius-sm);
+          white-space: nowrap;
+          flex-shrink: 0;
         }
         .file-badge {
           background: rgba(99, 102, 241, 0.1);
@@ -617,12 +633,25 @@ export function ActivityFeed({
         }
         .meta-separator {
           color: var(--border-subtle);
+          flex-shrink: 0;
+          user-select: none;
+        }
+        .uploader-text,
+        .author-text {
+          font-weight: var(--font-medium);
+          color: var(--text-secondary);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 140px;
+          flex-shrink: 1;
         }
         .meta-info.excerpt {
-          max-width: 320px;
+          max-width: 240px;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+          flex-shrink: 1;
         }
         .item-actions {
           display: flex;
@@ -631,8 +660,8 @@ export function ActivityFeed({
           flex-shrink: 0;
         }
         .feed-action-btn {
-          width: 30px;
-          height: 30px;
+          width: 32px;
+          height: 32px;
           border-radius: var(--radius-md);
           display: inline-flex;
           align-items: center;
@@ -643,6 +672,7 @@ export function ActivityFeed({
           cursor: pointer;
           transition: all var(--transition-fast);
           text-decoration: none;
+          flex-shrink: 0;
         }
         .feed-action-btn:hover {
           background: var(--bg-hover);
@@ -683,8 +713,36 @@ export function ActivityFeed({
             display: none;
           }
           .feed-action-btn {
-            width: 36px;
-            height: 36px;
+            width: 34px;
+            height: 34px;
+          }
+        }
+        @media (max-width: 640px) {
+          .uploader-text,
+          .author-text {
+            max-width: 90px;
+          }
+          .meta-info.excerpt {
+            max-width: 130px;
+          }
+        }
+        @media (max-width: 480px) {
+          .feed-item {
+            padding: 8px 10px;
+            gap: 10px;
+          }
+          .item-icon-wrapper {
+            width: 34px;
+            height: 34px;
+          }
+          .item-time {
+            font-size: 10px;
+          }
+          .uploader-text,
+          .author-text,
+          .uploader-separator,
+          .author-separator {
+            display: none !important;
           }
         }
       `}</style>

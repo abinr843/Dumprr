@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -8,6 +8,7 @@ import {
   FileText,
   Clock,
   Settings,
+  Shield,
 } from "lucide-react";
 
 interface MobileNavProps {
@@ -22,13 +23,23 @@ const BASE_NAV_ITEMS = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
+const ADMIN_NAV_ITEMS = [
+  { href: "/", label: "Home", icon: LayoutDashboard },
+  { href: "/files", label: "Files", icon: FolderOpen },
+  { href: "/posts", label: "Posts", icon: FileText },
+  { href: "/admin", label: "Admin", icon: Shield, isAdmin: true },
+  { href: "/settings", label: "Settings", icon: Settings },
+];
+
 export function MobileNav({ userRole }: MobileNavProps) {
   const pathname = usePathname();
+  const isAdminUser = userRole === "admin" || userRole === "superadmin";
+  const navItems = isAdminUser ? ADMIN_NAV_ITEMS : BASE_NAV_ITEMS;
 
   return (
     <>
       <nav className="mobile-nav" aria-label="Mobile navigation">
-        {BASE_NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
             (item.href !== "/" && pathname.startsWith(item.href));
@@ -37,12 +48,9 @@ export function MobileNav({ userRole }: MobileNavProps) {
             <Link
               key={item.href}
               href={item.href}
-              className={`mobile-nav-item ${isActive ? "mobile-nav-active" : ""}`}
+              className={`mobile-nav-item ${isActive ? "mobile-nav-active" : ""} ${"isAdmin" in item && item.isAdmin ? "mobile-nav-admin" : ""}`}
             >
-              <item.icon
-                size={20}
-                strokeWidth={isActive ? 2.2 : 1.6}
-              />
+              <item.icon size={21} strokeWidth={isActive ? 2.2 : 1.6} />
               <span className="mobile-nav-label">{item.label}</span>
             </Link>
           );
@@ -74,28 +82,34 @@ export function MobileNav({ userRole }: MobileNavProps) {
           align-items: center;
           justify-content: center;
           gap: 3px;
-          min-width: 52px;
-          min-height: 44px;
+          flex: 1;
+          min-height: 48px;
           padding: var(--space-1) var(--space-2);
           border-radius: var(--radius-md);
           color: var(--text-muted);
           text-decoration: none;
-          transition:
-            color var(--transition-fast),
-            transform var(--transition-fast);
+          transition: color var(--transition-fast), transform var(--transition-fast);
           -webkit-tap-highlight-color: transparent;
           touch-action: manipulation;
+          user-select: none;
         }
         .mobile-nav-item:active {
-          transform: scale(0.92);
+          transform: scale(0.90);
         }
         .mobile-nav-active {
           color: var(--color-primary);
         }
+        .mobile-nav-admin {
+          color: hsl(280, 70%, 60%);
+        }
+        .mobile-nav-admin.mobile-nav-active {
+          color: hsl(280, 85%, 65%);
+        }
         .mobile-nav-label {
-          font-size: 11px;
-          font-weight: var(--font-medium);
+          font-size: 10px;
+          font-weight: 600;
           letter-spacing: 0.01em;
+          white-space: nowrap;
         }
 
         @media (max-width: 768px) {

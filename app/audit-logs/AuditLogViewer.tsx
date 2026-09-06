@@ -18,8 +18,14 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   RefreshCw,
+  Download as DownloadIcon,
+  Calendar,
 } from "lucide-react";
+
+const PAGE_SIZE = 25;
+
 
 export interface RawAuditLog {
   id: string;
@@ -63,6 +69,14 @@ export function AuditLogViewer({ initialLogs }: AuditLogViewerProps) {
   const [resultFilter, setResultFilter] = useState<"ALL" | "SUCCESS" | "FAILED">("ALL");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [actorFilter, setActorFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(0);
+
+  // Helper to reset page on any filter change
+  function resetPage() { setPage(0); }
+
 
   // Compute stats
   const stats = useMemo(() => {
@@ -139,9 +153,50 @@ export function AuditLogViewer({ initialLogs }: AuditLogViewerProps) {
         }
       }
 
+      // Date range filter
+      if (dateFrom) {
+        const logDate = new Date(log.created_at);
+        const from = new Date(dateFrom);
+        from.setHours(0, 0, 0, 0);
+        if (logDate < from) return false;
+      }
+      if (dateTo) {
+        const logDate = new Date(log.created_at);
+        const to = new Date(dateTo);
+        to.setHours(23, 59, 59, 999);
+        if (logDate > to) return false;
+      }
+
+      // Actor filter
+      if (actorFilter.trim()) {
+        const q = actorFilter.toLowerCase();
+        const actor = log.actor_id?.toLowerCase() || "";
+        const email = (log.metadata?.email as string)?.toLowerCase() || "";
+        if (!actor.includes(q) && !email.includes(q)) return false;
+      }
+
       return true;
     });
-  }, [logs, resultFilter, categoryFilter, searchQuery]);
+  }, [logs, resultFilter, categoryFilter, searchQuery, actorFilter, dateFrom, dateTo]);
+
+  const totalPages = Math.ceil(filteredLogs.length / PAGE_SIZE);
+  const pagedLogs = filteredLogs.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  function exportCSV() {
+    const headers = ["timestamp", "action", "result", "entity_type", "target", "actor_id", "ip_address"];
+    const rows = filteredLogs.map((log) => {
+      const meta = log.metadata || {};
+      const result = ((meta.result as string) || "SUCCESS").toUpperCase();
+      const targetName = (meta.target_name as string) || (meta.fileName as string) || log.entity_id || "";
+      return [log.created_at, log.action, result, log.entity_type, targetName, log.actor_id || "", log.ip_address || ""].map(v => `"${v}"`).join(",");
+    });
+    const csv = [headers.join(","), ...rows].join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `audit_logs_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+  }
+
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -331,11 +386,139 @@ export function AuditLogViewer({ initialLogs }: AuditLogViewerProps) {
               </button>
             ))}
           </div>
+          {/* Date Range */}
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
+            <Calendar size={14} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); resetPage(); }}
+              style={{
+                background: "var(--bg-input)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "var(--radius-md)",
+                padding: "5px 10px",
+                fontSize: "var(--text-xs)",
+                color: "var(--text-primary)",
+                cursor: "pointer",
+              }}
+              title="From date"
+              aria-label="Filter from date"
+            />
+            <span style={{ color: "var(--text-muted)", fontSize: "var(--text-xs)" }}>to</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); resetPage(); }}
+              style={{
+                background: "var(--bg-input)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "var(--radius-md)",
+                padding: "5px 10px",
+                fontSize: "var(--text-xs)",
+                color: "var(--text-primary)",
+                cursor: "pointer",
+              }}
+              title="To date"
+              aria-label="Filter to date"
+            />
+            {(dateFrom || dateTo) && (
+              <button
+                type="button"
+                onClick={() => { setDateFrom(""); setDateTo(""); resetPage(); }}
+                style={{ fontSize: "var(--text-xs)", color: "var(--color-danger)", background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}
+              >
+                ✕ Clear dates
+              </button>
+            )}
+          </div>
+
+          {/* Actor filter */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--space-2)",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "var(--radius-md)",
+              padding: "6px 12px",
+              flex: "0 1 200px",
+            }}
+          >
+            <Filter size={14} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+            <input
+              type="text"
+              placeholder="Filter by actor / email"
+              value={actorFilter}
+              onChange={(e) => { setActorFilter(e.target.value); resetPage(); }}
+              style={{
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: "var(--text-primary)",
+                fontSize: "var(--text-sm)",
+                width: "100%",
+              }}
+            />
+          </div>
+
+          {/* Export CSV */}
+          <button
+            type="button"
+            onClick={exportCSV}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "7px 14px",
+              background: "var(--bg-input)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "var(--radius-md)",
+              fontSize: "var(--text-xs)",
+              fontWeight: 600,
+              color: "var(--text-primary)",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+            title={`Export ${filteredLogs.length} filtered events as CSV`}
+          >
+            <DownloadIcon size={13} />
+            Export CSV
+          </button>
         </div>
       </Card>
 
+
       {/* Log Events List */}
       <Card>
+        <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border-subtle)", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>
+          <span>Showing {pagedLogs.length} of {filteredLogs.length} events</span>
+          {totalPages > 1 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+              <button
+                type="button"
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
+                style={{ background: "none", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-sm)", padding: "3px 8px", cursor: page === 0 ? "not-allowed" : "pointer", opacity: page === 0 ? 0.4 : 1, display: "flex", alignItems: "center" }}
+                aria-label="Previous page"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span style={{ fontWeight: 600 }}>Page {page + 1} / {totalPages}</span>
+              <button
+                type="button"
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+                style={{ background: "none", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-sm)", padding: "3px 8px", cursor: page >= totalPages - 1 ? "not-allowed" : "pointer", opacity: page >= totalPages - 1 ? 0.4 : 1, display: "flex", alignItems: "center" }}
+                aria-label="Next page"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+
         {filteredLogs.length === 0 ? (
           <div
             style={{
@@ -356,152 +539,351 @@ export function AuditLogViewer({ initialLogs }: AuditLogViewerProps) {
             </p>
           </div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                textAlign: "left",
-                fontSize: "var(--text-sm)",
-              }}
-            >
-              <thead>
-                <tr
-                  style={{
-                    borderBottom: "1px solid var(--border-color)",
-                    background: "var(--bg-input)",
-                    color: "var(--text-secondary)",
-                    fontSize: "var(--text-xs)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  <th style={{ padding: "12px 16px", width: "40px" }}></th>
-                  <th style={{ padding: "12px 16px" }}>Timestamp</th>
-                  <th style={{ padding: "12px 16px" }}>Action</th>
-                  <th style={{ padding: "12px 16px" }}>Result</th>
-                  <th style={{ padding: "12px 16px" }}>Target</th>
-                  <th style={{ padding: "12px 16px" }}>Actor / IP</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredLogs.map((log) => {
-                  const meta = log.metadata || {};
-                  const result = ((meta.result as string) || "SUCCESS").toUpperCase();
-                  const isExpanded = expandedId === log.id;
-                  const { time: timeFormatted, date: dateFormatted } = formatAuditTimestamp(log.created_at);
+          <>
+            {/* Desktop Table View */}
+            <div className="audit-desktop-table" style={{ overflowX: "auto" }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  textAlign: "left",
+                  fontSize: "var(--text-sm)",
+                }}
+              >
+                <thead>
+                  <tr
+                    style={{
+                      borderBottom: "1px solid var(--border-subtle)",
+                      background: "var(--bg-input)",
+                      color: "var(--text-secondary)",
+                      fontSize: "var(--text-xs)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    <th style={{ padding: "12px 16px", width: "40px" }}></th>
+                    <th style={{ padding: "12px 16px" }}>Timestamp</th>
+                    <th style={{ padding: "12px 16px" }}>Action</th>
+                    <th style={{ padding: "12px 16px" }}>Result</th>
+                    <th style={{ padding: "12px 16px" }}>Target</th>
+                    <th style={{ padding: "12px 16px" }}>Actor / IP</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedLogs.map((log) => {
+                    const meta = log.metadata || {};
+                    const result = ((meta.result as string) || "SUCCESS").toUpperCase();
+                    const isExpanded = expandedId === log.id;
+                    const { time: timeFormatted, date: dateFormatted } = formatAuditTimestamp(log.created_at);
 
-                  const targetName =
-                    (meta.target_name as string) ||
-                    (meta.fileName as string) ||
-                    (meta.postTitle as string) ||
-                    log.entity_id ||
-                    "-";
+                    const targetName =
+                      (meta.target_name as string) ||
+                      (meta.fileName as string) ||
+                      (meta.postTitle as string) ||
+                      log.entity_id ||
+                      "-";
 
-                  return (
-                    <React.Fragment key={log.id}>
-                      <tr
-                        onClick={() => toggleExpand(log.id)}
-                        style={{
-                          borderBottom: "1px solid var(--border-color)",
-                          cursor: "pointer",
-                          transition: "background 0.15s ease",
-                          background: isExpanded ? "var(--bg-input)" : "transparent",
-                        }}
-                      >
-                        <td style={{ padding: "12px 16px", color: "var(--text-muted)" }}>
-                          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                        </td>
-                        <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
-                          <div style={{ fontWeight: 500 }} suppressHydrationWarning>{timeFormatted}</div>
-                          <div style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }} suppressHydrationWarning>
-                            {dateFormatted}
-                          </div>
-                        </td>
-                        <td style={{ padding: "12px 16px" }}>
-                          {getActionBadge(log.action, result)}
-                        </td>
-                        <td style={{ padding: "12px 16px" }}>
-                          {result === "SUCCESS" ? (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "#10b981", fontSize: "var(--text-xs)", fontWeight: 600 }}>
-                              <CheckCircle2 size={14} /> SUCCESS
-                            </span>
-                          ) : (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "#ef4444", fontSize: "var(--text-xs)", fontWeight: 600 }}>
-                              <XCircle size={14} /> FAILED
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: "12px 16px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            {getEntityIcon(log.entity_type)}
-                            <span style={{ fontWeight: 500, maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {targetName}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)", marginLeft: "21px" }}>
-                            {log.entity_type}
-                          </div>
-                        </td>
-                        <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
-                          <div style={{ fontSize: "var(--text-xs)", fontFamily: "monospace", color: "var(--text-secondary)" }}>
-                            {log.ip_address || "unknown IP"}
-                          </div>
-                          <div style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>
-                            {log.actor_id ? `User: ${log.actor_id.slice(0, 8)}...` : (meta.email as string) || "Anonymous"}
-                          </div>
-                        </td>
-                      </tr>
-
-                      {/* Expanded Metadata Row */}
-                      {isExpanded && (
-                        <tr style={{ background: "var(--bg-input)", borderBottom: "1px solid var(--border-color)" }}>
-                          <td colSpan={6} style={{ padding: "16px 24px" }}>
-                            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
-                              <div style={{ fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-secondary)" }}>
-                                Event Details & Metadata
-                              </div>
-                              <pre
-                                style={{
-                                  background: "var(--bg-card)",
-                                  border: "1px solid var(--border-color)",
-                                  borderRadius: "var(--radius-sm)",
-                                  padding: "12px",
-                                  fontSize: "var(--text-xs)",
-                                  fontFamily: "monospace",
-                                  overflowX: "auto",
-                                  color: "var(--text-primary)",
-                                  margin: 0,
-                                }}
-                              >
-                                {JSON.stringify(
-                                  {
-                                    id: log.id,
-                                    actor_id: log.actor_id,
-                                    action: log.action,
-                                    entity_type: log.entity_type,
-                                    entity_id: log.entity_id,
-                                    ip_address: log.ip_address,
-                                    user_agent: log.user_agent,
-                                    metadata: log.metadata,
-                                    created_at: log.created_at,
-                                  },
-                                  null,
-                                  2
-                                )}
-                              </pre>
+                    return (
+                      <React.Fragment key={log.id}>
+                        <tr
+                          onClick={() => toggleExpand(log.id)}
+                          style={{
+                            borderBottom: "1px solid var(--border-subtle)",
+                            cursor: "pointer",
+                            transition: "background 0.15s ease",
+                            background: isExpanded ? "var(--bg-input)" : "transparent",
+                          }}
+                        >
+                          <td style={{ padding: "12px 16px", color: "var(--text-muted)" }}>
+                            {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </td>
+                          <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                            <div style={{ fontWeight: 500 }} suppressHydrationWarning>{timeFormatted}</div>
+                            <div style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }} suppressHydrationWarning>
+                              {dateFormatted}
+                            </div>
+                          </td>
+                          <td style={{ padding: "12px 16px" }}>
+                            {getActionBadge(log.action, result)}
+                          </td>
+                          <td style={{ padding: "12px 16px" }}>
+                            {result === "SUCCESS" ? (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "#10b981", fontSize: "var(--text-xs)", fontWeight: 600 }}>
+                                <CheckCircle2 size={14} /> SUCCESS
+                              </span>
+                            ) : (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "#ef4444", fontSize: "var(--text-xs)", fontWeight: 600 }}>
+                                <XCircle size={14} /> FAILED
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: "12px 16px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              {getEntityIcon(log.entity_type)}
+                              <span style={{ fontWeight: 500, maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {targetName}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)", marginLeft: "21px" }}>
+                              {log.entity_type}
+                            </div>
+                          </td>
+                          <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                            <div style={{ fontSize: "var(--text-xs)", fontFamily: "monospace", color: "var(--text-secondary)" }}>
+                              {log.ip_address || "unknown IP"}
+                            </div>
+                            <div style={{ fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>
+                              {log.actor_id ? `User: ${log.actor_id.slice(0, 8)}...` : (meta.email as string) || "Anonymous"}
                             </div>
                           </td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+
+                        {/* Expanded Metadata Row */}
+                        {isExpanded && (
+                          <tr style={{ background: "var(--bg-input)", borderBottom: "1px solid var(--border-color)" }}>
+                            <td colSpan={6} style={{ padding: "16px 24px" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                                <div style={{ fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--text-secondary)" }}>
+                                  Event Details & Metadata
+                                </div>
+                                <pre
+                                  style={{
+                                    background: "var(--bg-card)",
+                                    border: "1px solid var(--border-color)",
+                                    borderRadius: "var(--radius-sm)",
+                                    padding: "12px",
+                                    fontSize: "var(--text-xs)",
+                                    fontFamily: "monospace",
+                                    overflowX: "auto",
+                                    color: "var(--text-primary)",
+                                    margin: 0,
+                                  }}
+                                >
+                                  {JSON.stringify(
+                                    {
+                                      id: log.id,
+                                      actor_id: log.actor_id,
+                                      action: log.action,
+                                      entity_type: log.entity_type,
+                                      entity_id: log.entity_id,
+                                      ip_address: log.ip_address,
+                                      user_agent: log.user_agent,
+                                      metadata: log.metadata,
+                                      created_at: log.created_at,
+                                    },
+                                    null,
+                                    2
+                                  )}
+                                </pre>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card / Feed View */}
+            <div className="audit-mobile-cards">
+              {pagedLogs.map((log) => {
+                const meta = log.metadata || {};
+                const result = ((meta.result as string) || "SUCCESS").toUpperCase();
+                const isExpanded = expandedId === log.id;
+                const { time: timeFormatted, date: dateFormatted } = formatAuditTimestamp(log.created_at);
+                const targetName =
+                  (meta.target_name as string) ||
+                  (meta.fileName as string) ||
+                  (meta.postTitle as string) ||
+                  log.entity_id ||
+                  "-";
+
+                return (
+                  <div
+                    key={log.id}
+                    className={`audit-mobile-card ${isExpanded ? "expanded" : ""}`}
+                    onClick={() => toggleExpand(log.id)}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <div className="audit-mobile-card-top">
+                      <div className="audit-mobile-badge-wrap">
+                        {getActionBadge(log.action, result)}
+                      </div>
+                      <div className="audit-mobile-result">
+                        {result === "SUCCESS" ? (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "#10b981", fontSize: "11px", fontWeight: 700 }}>
+                            <CheckCircle2 size={13} /> SUCCESS
+                          </span>
+                        ) : (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "#ef4444", fontSize: "11px", fontWeight: 700 }}>
+                            <XCircle size={13} /> FAILED
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="audit-mobile-card-target">
+                      {getEntityIcon(log.entity_type)}
+                      <span className="audit-mobile-target-name">{targetName}</span>
+                    </div>
+
+                    <div className="audit-mobile-card-bottom">
+                      <div className="audit-mobile-meta-info">
+                        <span>{log.ip_address || "unknown IP"}</span>
+                        <span>·</span>
+                        <span suppressHydrationWarning>{timeFormatted}</span>
+                      </div>
+                      <div className="audit-mobile-expand-icon">
+                        {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="audit-mobile-card-details" onClick={(e) => e.stopPropagation()}>
+                        <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>
+                          Metadata &amp; Event Payload ({dateFormatted})
+                        </div>
+                        <pre className="audit-mobile-json">
+                          {JSON.stringify(
+                            {
+                              id: log.id,
+                              actor_id: log.actor_id,
+                              action: log.action,
+                              entity_type: log.entity_type,
+                              entity_id: log.entity_id,
+                              ip_address: log.ip_address,
+                              user_agent: log.user_agent,
+                              metadata: log.metadata,
+                              created_at: log.created_at,
+                            },
+                            null,
+                            2
+                          )}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </Card>
+
+      {/* Pagination footer */}
+      {totalPages > 1 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "var(--space-2)", paddingBottom: "var(--space-4)", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+            style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)", padding: "8px 14px", cursor: page === 0 ? "not-allowed" : "pointer", opacity: page === 0 ? 0.4 : 1, display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-sm)", fontWeight: 500, minHeight: 40 }}
+          >
+            <ChevronLeft size={14} /> Previous
+          </button>
+          <span style={{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text-secondary)", padding: "0 8px" }}>
+            Page {page + 1} of {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            style={{ background: "var(--bg-input)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)", padding: "8px 14px", cursor: page >= totalPages - 1 ? "not-allowed" : "pointer", opacity: page >= totalPages - 1 ? 0.4 : 1, display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--text-sm)", fontWeight: 500, minHeight: 40 }}
+          >
+            Next <ChevronRight size={14} />
+          </button>
+        </div>
+      )}
+
+      <style jsx>{`
+        @media (min-width: 768px) {
+          .audit-mobile-cards {
+            display: none !important;
+          }
+        }
+        @media (max-width: 767px) {
+          .audit-desktop-table {
+            display: none !important;
+          }
+          .audit-mobile-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: var(--space-3);
+          }
+          .audit-mobile-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease;
+          }
+          .audit-mobile-card:active {
+            background: var(--bg-hover);
+          }
+          .audit-mobile-card.expanded {
+            border-color: var(--color-primary);
+            background: var(--bg-hover);
+          }
+          .audit-mobile-card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          }
+          .audit-mobile-card-target {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: var(--text-sm);
+            font-weight: 600;
+            color: var(--text-primary);
+            overflow: hidden;
+          }
+          .audit-mobile-target-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+          .audit-mobile-card-bottom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-muted);
+            padding-top: 4px;
+            border-top: 1px solid var(--border-subtle);
+          }
+          .audit-mobile-meta-info {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .audit-mobile-card-details {
+            margin-top: 4px;
+            padding-top: 8px;
+            border-top: 1px dashed var(--border-subtle);
+          }
+          .audit-mobile-json {
+            background: var(--bg-input);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 8px;
+            font-size: 11px;
+            font-family: monospace;
+            overflow-x: auto;
+            color: var(--text-primary);
+            margin: 0;
+            max-height: 240px;
+          }
+        }
+      `}</style>
     </div>
   );
 }

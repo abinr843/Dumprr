@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { PostEditorModal } from "./PostEditorModal";
 import { PostDetailModal } from "./PostDetailModal";
+import { ActionContextMenu } from "@/components/storage/ActionContextMenu";
 import type { PostRecord, PostWithAuthor } from "@/types/posts";
 
 interface PostsManagerProps {
@@ -224,26 +225,14 @@ export function PostsManager({ isAdmin }: PostsManagerProps) {
                             <Send size={15} />
                           </button>
                         )}
-                        <button className="post-action-btn" title="More" onClick={() => setActionMenuId(actionMenuId === post.id ? null : post.id)}>
-                          <MoreVertical size={15} />
-                        </button>
-                        {actionMenuId === post.id && (
-                          <div className="post-action-menu">
-                            {post.status !== "archived" && (
-                              <button onClick={() => handleStatusChange(post.id, "archived")}>
-                                <Archive size={14} /> Archive
-                              </button>
-                            )}
-                            {post.status === "archived" && (
-                              <button onClick={() => handleStatusChange(post.id, "draft")}>
-                                <Clock size={14} /> Move to Drafts
-                              </button>
-                            )}
-                            <button className="danger" onClick={() => { setActionMenuId(null); handleDelete(post.id); }}>
-                              <Trash2 size={14} /> Move to Trash
-                            </button>
-                          </div>
-                        )}
+                        <PostActionsTrigger
+                          post={post}
+                          isOpen={actionMenuId === post.id}
+                          onToggle={() => setActionMenuId(actionMenuId === post.id ? null : post.id)}
+                          onClose={() => setActionMenuId(null)}
+                          onStatusChange={handleStatusChange}
+                          onDelete={handleDelete}
+                        />
                       </>
                     )}
                   </div>
@@ -537,3 +526,69 @@ export function PostsManager({ isAdmin }: PostsManagerProps) {
     </>
   );
 }
+
+function PostActionsTrigger({
+  post,
+  isOpen,
+  onToggle,
+  onClose,
+  onStatusChange,
+  onDelete,
+}: {
+  post: PostRecord;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onStatusChange: (id: string, status: "draft" | "published" | "archived") => void;
+  onDelete: (id: string) => void;
+}) {
+  const btnRef = React.useRef<HTMLButtonElement>(null);
+
+  const items = [];
+  if (post.status !== "archived") {
+    items.push({
+      icon: <Archive size={15} />,
+      label: "Archive",
+      action: () => onStatusChange(post.id, "archived"),
+    });
+  }
+  if (post.status === "archived") {
+    items.push({
+      icon: <Clock size={15} />,
+      label: "Move to Drafts",
+      action: () => onStatusChange(post.id, "draft"),
+    });
+  }
+  items.push({
+    icon: <Trash2 size={15} />,
+    label: "Move to Trash",
+    action: () => onDelete(post.id),
+    danger: true,
+  });
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        className="post-action-btn"
+        title="More"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+      >
+        <MoreVertical size={15} />
+      </button>
+
+      <ActionContextMenu
+        isOpen={isOpen}
+        onClose={onClose}
+        triggerRef={btnRef}
+        title={post.title}
+        subtitle={`Status: ${post.status}`}
+        icon={<FileText size={18} style={{ color: "var(--color-primary)" }} />}
+        items={items}
+      />
+    </>
+  );
+}
+

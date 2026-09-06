@@ -43,10 +43,12 @@ next-env.d.ts
 .vercel
 
 # ============================================================
-# Testing & Coverage
+# Testing, Scripts & Coverage
 # ============================================================
 /coverage
 .nyc_output
+/tests/
+/scripts/
 
 # ============================================================
 # Debug & Runtime Logs

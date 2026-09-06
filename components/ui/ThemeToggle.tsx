@@ -41,6 +41,7 @@ export function ThemeToggle() {
         className="theme-toggle"
         aria-label="Toggle theme"
         style={{ width: 36, height: 36 }}
+        suppressHydrationWarning
       />
     );
   }
@@ -59,6 +60,7 @@ export function ThemeToggle() {
       className="theme-toggle"
       aria-label={`Current: ${label}. Click to change.`}
       title={label}
+      suppressHydrationWarning
     >
       <Icon size={18} strokeWidth={2} />
       <style jsx>{`
