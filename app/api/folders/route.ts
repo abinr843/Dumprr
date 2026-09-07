@@ -57,30 +57,51 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Enrich with child counts
-  const enriched = await Promise.all(
-    (folders || []).map(async (folder) => {
-      const [{ count: childFolderCount }, { count: childFileCount }] =
-        await Promise.all([
-          adminClient
-            .from("folders")
-            .select("id", { count: "exact", head: true })
-            .eq("parent_id", folder.id)
-            .eq("status", "active"),
-          adminClient
-            .from("files")
-            .select("id", { count: "exact", head: true })
-            .eq("folder_id", folder.id)
-            .eq("status", "active"),
-        ]);
+  // Batch-enrich with child counts in 2 queries instead of N*2
+  const folderIds = (folders || []).map((f) => f.id);
+  let childFolderCounts: Record<string, number> = {};
+  let childFileCounts: Record<string, number> = {};
 
-      return {
-        ...folder,
-        childFolderCount: childFolderCount ?? 0,
-        childFileCount: childFileCount ?? 0,
-      };
-    })
-  );
+  if (folderIds.length > 0) {
+    const [childFoldersResult, childFilesResult] = await Promise.all([
+      // Count child folders grouped by parent_id
+      adminClient
+        .from("folders")
+        .select("parent_id")
+        .in("parent_id", folderIds)
+        .eq("status", "active"),
+      // Count child files grouped by folder_id
+      adminClient
+        .from("files")
+        .select("folder_id")
+        .in("folder_id", folderIds)
+        .eq("status", "active"),
+    ]);
+
+    // Tally child folder counts
+    if (childFoldersResult.data) {
+      for (const row of childFoldersResult.data) {
+        if (row.parent_id) {
+          childFolderCounts[row.parent_id] = (childFolderCounts[row.parent_id] || 0) + 1;
+        }
+      }
+    }
+
+    // Tally child file counts
+    if (childFilesResult.data) {
+      for (const row of childFilesResult.data) {
+        if (row.folder_id) {
+          childFileCounts[row.folder_id] = (childFileCounts[row.folder_id] || 0) + 1;
+        }
+      }
+    }
+  }
+
+  const enriched = (folders || []).map((folder) => ({
+    ...folder,
+    childFolderCount: childFolderCounts[folder.id] || 0,
+    childFileCount: childFileCounts[folder.id] || 0,
+  }));
 
   return NextResponse.json({ folders: enriched });
 }

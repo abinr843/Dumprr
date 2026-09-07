@@ -53,7 +53,7 @@ export function calculateTrashExpiration(
  */
 export async function cleanupExpiredTrash(
   daysThreshold: number = TRASH_RETENTION_DAYS
-): Promise<{ filesRemoved: number; foldersRemoved: number }> {
+): Promise<{ filesRemoved: number; foldersRemoved: number; postsRemoved: number }> {
   const adminClient = createAdminClient();
   const cutoffDate = new Date(
     Date.now() - daysThreshold * 24 * 60 * 60 * 1000
@@ -61,6 +61,7 @@ export async function cleanupExpiredTrash(
 
   let filesRemoved = 0;
   let foldersRemoved = 0;
+  let postsRemoved = 0;
 
   try {
     // 1. Find expired trashed files
@@ -140,8 +141,37 @@ export async function cleanupExpiredTrash(
       }
     }
 
+    // 3. Find expired trashed posts
+    const { data: expiredPosts, error: postsQueryErr } = await adminClient
+      .from("posts")
+      .select("id, title")
+      .not("deleted_at", "is", null)
+      .lte("deleted_at", cutoffDate);
+
+    if (postsQueryErr) {
+      logger.error("Failed to query expired trash posts", {
+        error: postsQueryErr.message,
+      });
+    }
+
+    if (expiredPosts && expiredPosts.length > 0) {
+      const postIds = expiredPosts.map((p) => p.id);
+      const { error: deleteErr } = await adminClient
+        .from("posts")
+        .delete()
+        .in("id", postIds);
+
+      if (deleteErr) {
+        logger.error("Failed to delete expired post rows", {
+          error: deleteErr.message,
+        });
+      } else {
+        postsRemoved = postIds.length;
+      }
+    }
+
     // Audit log the cleanup
-    if (filesRemoved > 0 || foldersRemoved > 0) {
+    if (filesRemoved > 0 || foldersRemoved > 0 || postsRemoved > 0) {
       await logFileEvent({
         action: AUDIT_ACTIONS.FILE_PERMANENTLY_DELETED,
         entityType: "file",
@@ -149,17 +179,18 @@ export async function cleanupExpiredTrash(
           event: "trash_cleanup",
           filesRemoved,
           foldersRemoved,
+          postsRemoved,
           cutoffDate,
         },
       });
     }
 
-    logger.info("Trash cleanup completed", { filesRemoved, foldersRemoved });
+    logger.info("Trash cleanup completed", { filesRemoved, foldersRemoved, postsRemoved });
   } catch (err) {
     logger.error("Trash cleanup exception", {
       error: err instanceof Error ? err.message : "Unknown error",
     });
   }
 
-  return { filesRemoved, foldersRemoved };
+  return { filesRemoved, foldersRemoved, postsRemoved };
 }

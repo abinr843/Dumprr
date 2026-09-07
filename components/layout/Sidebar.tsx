@@ -16,6 +16,8 @@ import {
   LogOut,
   LogIn,
   User,
+  Users,
+  Info,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 
@@ -28,6 +30,9 @@ interface NavItem {
 
 const ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/admin", label: "Admin Panel", icon: Shield },
+  { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/storage", label: "Storage", icon: HardDrive },
+  { href: "/admin/settings", label: "Settings", icon: Settings },
   { href: "/audit-logs", label: "Audit Logs", icon: ShieldCheck },
 ];
 
@@ -36,7 +41,6 @@ const MAIN_NAV_ITEMS: NavItem[] = [
   { href: "/files", label: "Files", icon: FolderOpen },
   { href: "/posts", label: "Posts", icon: FileText },
   { href: "/recent", label: "Recent", icon: Clock },
-  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 
@@ -119,8 +123,18 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
           })}
         </nav>
 
-        {/* Footer Area: Storage + User Profile + Auth Action + Toggle */}
+        {/* Footer Area: Info Links + Storage + User Profile + Auth Action + Toggle */}
         <div className="sidebar-footer">
+          {/* Info Links (About, Privacy, Terms) */}
+          {!collapsed && (
+            <div className="sidebar-info-links">
+              <Link href="/about" className="sidebar-info-link">About</Link>
+              <span className="sidebar-info-dot">·</span>
+              <Link href="/privacy" className="sidebar-info-link">Privacy</Link>
+              <span className="sidebar-info-dot">·</span>
+              <Link href="/terms" className="sidebar-info-link">Terms</Link>
+            </div>
+          )}
           {/* Storage Meter */}
           {!collapsed && (
             <div className="sidebar-storage">
@@ -536,6 +550,31 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
         .sidebar-sub-link-active {
           color: hsl(280, 80%, 60%) !important;
           background: hsla(280, 70%, 60%, 0.1) !important;
+        }
+
+        /* Info Links (About, Privacy, Terms) */
+        .sidebar-info-links {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: var(--space-2) var(--space-2) 0;
+          margin-bottom: var(--space-1);
+        }
+        .sidebar-info-link {
+          font-size: 11px;
+          color: var(--text-muted);
+          text-decoration: none;
+          transition: color var(--transition-fast);
+        }
+        .sidebar-info-link:hover {
+          color: var(--text-secondary);
+          text-decoration: underline;
+        }
+        .sidebar-info-dot {
+          color: var(--text-muted);
+          font-size: 10px;
+          opacity: 0.5;
         }
 
         @media (max-width: 768px) {

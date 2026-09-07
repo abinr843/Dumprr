@@ -2,7 +2,7 @@ import { LayoutShell } from "@/components/layout/LayoutShell";
 import { FilesManager } from "@/components/storage/FilesManager";
 import { getSession } from "@/lib/auth/session";
 import { isAdmin } from "@/lib/auth/roles";
-import { createClient } from "@/lib/supabase/server";
+import { getRootFiles, getRootFolders } from "@/lib/storage/files-server";
 import type { UserRole } from "@/types/database.types";
 import type { Metadata } from "next";
 
@@ -17,13 +17,11 @@ export default async function FilesPage() {
     ? isAdmin(session.profile.role as UserRole)
     : false;
 
-  const supabase = await createClient();
-  const { data: files } = await supabase
-    .from("files")
-    .select("*")
-    .eq("status", "active")
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
+  // Fetch root files + folders in parallel — eliminates client-side mount fetch
+  const [rootFiles, rootFolders] = await Promise.all([
+    getRootFiles(userIsAdmin),
+    getRootFolders(userIsAdmin),
+  ]);
 
   return (
     <LayoutShell userEmail={session?.user?.email} userRole={session?.profile?.role}>
@@ -57,7 +55,7 @@ export default async function FilesPage() {
           </p>
         </div>
 
-        <FilesManager initialFiles={files || []} isAdmin={userIsAdmin} />
+        <FilesManager initialFiles={rootFiles} initialFolders={rootFolders} isAdmin={userIsAdmin} />
       </div>
     </LayoutShell>
   );

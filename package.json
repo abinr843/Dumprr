@@ -15,7 +15,8 @@
     "verify:day5": "npx -y tsx scripts/verify-day5.ts",
     "verify:day6": "npx -y tsx scripts/verify-day6.ts",
     "verify:day7": "npx -y tsx scripts/verify-day7.ts",
-    "verify:day8": "npx -y tsx scripts/verify-day8.ts"
+    "verify:day8": "npx -y tsx scripts/verify-day8.ts",
+    "cleanup:retention": "npx -y tsx scripts/cleanup-retention.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.6",

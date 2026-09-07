@@ -1,66 +1,22 @@
-import { LayoutShell } from "@/components/layout/LayoutShell";
-import { Card } from "@/components/ui/Card";
-import { Settings as SettingsIcon } from "lucide-react";
-import { requireSession } from "@/lib/auth/session";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth/session";
+import { isAdmin } from "@/lib/auth/roles";
+import type { UserRole } from "@/types/database.types";
 
-export const metadata = {
-  title: "Settings — DUMPR",
-  description: "System and profile settings",
-};
-
+/**
+ * /settings route handler.
+ * - Admins → redirect to /admin/settings
+ * - Everyone else → redirect to home (settings are admin-only)
+ */
 export default async function SettingsPage() {
-  const session = await requireSession();
+  const session = await getSession();
+  const userIsAdmin = session?.profile
+    ? isAdmin(session.profile.role as UserRole)
+    : false;
 
-  return (
-    <LayoutShell userEmail={session.user.email} userRole={session.profile?.role}>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--space-6)",
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: "var(--text-2xl)",
-              fontWeight: 700,
-              letterSpacing: "-0.02em",
-              marginBottom: "var(--space-1)",
-            }}
-          >
-            Settings
-          </h1>
-          <p
-            style={{
-              color: "var(--text-secondary)",
-              fontSize: "var(--text-sm)",
-            }}
-          >
-            Manage your profile, preferences, and system configuration.
-          </p>
-        </div>
+  if (userIsAdmin) {
+    redirect("/admin/settings");
+  }
 
-        <Card>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "var(--space-16) 0",
-              color: "var(--text-muted)",
-              gap: "var(--space-3)",
-            }}
-          >
-            <SettingsIcon size={48} strokeWidth={1.2} />
-            <p style={{ fontSize: "var(--text-sm)" }}>
-              Settings panel coming soon. Profile, theme, and system
-              configuration.
-            </p>
-          </div>
-        </Card>
-      </div>
-    </LayoutShell>
-  );
+  redirect("/");
 }

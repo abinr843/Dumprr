@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   const filesCount = filesResult.status === "fulfilled" ? (filesResult.value.count ?? 0) : 0;
   let storageUsedBytes = 0;
   if (storageResult.status === "fulfilled" && storageResult.value.data) {
-    storageUsedBytes = storageResult.value.data.reduce((sum: number, f: any) => sum + (f.size_bytes || 0), 0);
+    storageUsedBytes = storageResult.value.data.reduce((sum: number, f: { size_bytes: number | null }) => sum + (f.size_bytes || 0), 0);
   }
   const postsCount = postsResult.status === "fulfilled" ? (postsResult.value.count ?? 0) : 0;
   const uploadsToday = uploadsResult.status === "fulfilled" ? (uploadsResult.value.count ?? 0) : 0;

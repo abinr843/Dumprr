@@ -177,6 +177,45 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // 2a. Storage Cap Enforcement (8 GB default, configurable via system_settings)
+  const adminDbClient = createAdminClient();
+  const DEFAULT_STORAGE_CAP = 8 * 1024 * 1024 * 1024; // 8 GB
+  let storageCap = DEFAULT_STORAGE_CAP;
+
+  const { data: capSetting } = await adminDbClient
+    .from("system_settings")
+    .select("value")
+    .eq("key", "storage.storage_cap_bytes")
+    .single();
+  if (capSetting?.value) {
+    const parsed = parseInt(String(capSetting.value), 10);
+    if (!isNaN(parsed) && parsed > 0) storageCap = parsed;
+  }
+
+  // Get current storage usage
+  const { data: usageFiles } = await adminDbClient
+    .from("files")
+    .select("size_bytes")
+    .eq("status", "active")
+    .is("deleted_at", null);
+
+  const currentUsage = (usageFiles || []).reduce((sum, f) => sum + (f.size_bytes || 0), 0);
+
+  if (currentUsage >= storageCap) {
+    const formatBytes = (b: number) => {
+      const gb = b / (1024 * 1024 * 1024);
+      return `${gb.toFixed(2)} GB`;
+    };
+    return NextResponse.json(
+      {
+        error: `Storage limit reached. Used ${formatBytes(currentUsage)} of ${formatBytes(storageCap)}. Delete files or increase the storage cap to continue uploading.`,
+        code: "STORAGE_FULL",
+        usage: { usedBytes: currentUsage, capBytes: storageCap },
+      },
+      { status: 413 }
+    );
+  }
+
   // 2. Parse Multipart Form Data
   let formData: FormData;
   try {
@@ -203,6 +242,33 @@ export async function POST(req: NextRequest) {
   // Convert file blob to Uint8Array for binary validation
   const arrayBuffer = await fileEntry.arrayBuffer();
   const buffer = new Uint8Array(arrayBuffer);
+
+  // Check if this specific upload would exceed the remaining storage quota
+  if (currentUsage + buffer.length > storageCap) {
+    const formatBytes = (b: number) => {
+      const mb = b / (1024 * 1024);
+      if (mb < 1024) return `${mb.toFixed(1)} MB`;
+      return `${(mb / 1024).toFixed(2)} GB`;
+    };
+    await logSecurityUploadRejected({
+      userId: user.id,
+      fileName: rawFilename,
+      sizeBytes: buffer.length,
+      mimeType: fileEntry.type,
+      ipAddress,
+      userAgent,
+      securityReason: "STORAGE_CAP_EXCEEDED",
+      error: `Storage cap of ${formatBytes(storageCap)} would be exceeded by upload of ${formatBytes(buffer.length)}`,
+    });
+    return NextResponse.json(
+      {
+        error: `Upload rejected: Storage cap (${formatBytes(storageCap)}) would be exceeded. Available space: ${formatBytes(Math.max(0, storageCap - currentUsage))}.`,
+        code: "STORAGE_CAP_EXCEEDED",
+        usage: { usedBytes: currentUsage, capBytes: storageCap, fileBytes: buffer.length },
+      },
+      { status: 413 }
+    );
+  }
 
   // 3. Server-Side Binary Magic Bytes & Extension Validation
   const validation = validateUploadedFile(rawFilename, buffer, fileEntry.type);

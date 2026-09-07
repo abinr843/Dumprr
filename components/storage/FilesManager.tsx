@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { dedupFetch } from "@/lib/client/fetch-dedup";
 import { ActionContextMenu } from "./ActionContextMenu";
 import {
   FileText,
@@ -43,6 +44,7 @@ type FileRow = Database["public"]["Tables"]["files"]["Row"];
 
 interface FilesManagerProps {
   initialFiles: FileRow[];
+  initialFolders?: FolderWithStats[];
   isAdmin: boolean;
 }
 
@@ -86,7 +88,7 @@ function getFileIcon(filename: string) {
 
 type TabKey = "files" | "trash";
 
-export function FilesManager({ initialFiles, isAdmin }: FilesManagerProps) {
+export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesManagerProps) {
   // ─── State ────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<TabKey>("files");
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
@@ -95,9 +97,12 @@ export function FilesManager({ initialFiles, isAdmin }: FilesManagerProps) {
   ]);
 
   const [files, setFiles] = useState<FileRow[]>(initialFiles);
-  const [folders, setFolders] = useState<FolderWithStats[]>([]);
+  const [folders, setFolders] = useState<FolderWithStats[]>(initialFolders || []);
   const [loading, setLoading] = useState(false);
   const [trashCount, setTrashCount] = useState(0);
+
+  // Track whether root data was hydrated from server (skip mount fetch)
+  const hydratedRef = useRef(!!(initialFiles.length || initialFolders?.length));
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "name" | "size" | "downloads">(
@@ -151,62 +156,72 @@ export function FilesManager({ initialFiles, isAdmin }: FilesManagerProps) {
 
   // ─── Data Loading ─────────────────────────────────────────────────
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const folderParam =
         currentFolderId === null ? "null" : currentFolderId;
 
-      const [filesRes, foldersRes] = await Promise.all([
-        fetch(`/api/files?folder_id=${folderParam}&status=active`),
-        fetch(`/api/folders?parent_id=${folderParam}&status=active`),
+      const [filesData, foldersData] = await Promise.all([
+        dedupFetch<{ files: FileRow[] }>(
+          `/api/files?folder_id=${folderParam}&status=active`,
+          { signal }
+        ),
+        dedupFetch<{ folders: FolderWithStats[] }>(
+          `/api/folders?parent_id=${folderParam}&status=active`,
+          { signal }
+        ),
       ]);
 
-      if (filesRes.ok) {
-        const data = await filesRes.json();
-        setFiles(data.files || []);
-      }
-      if (foldersRes.ok) {
-        const data = await foldersRes.json();
-        setFolders(data.folders || []);
-      }
+      setFiles(filesData.files || []);
+      setFolders(foldersData.folders || []);
 
       // Load breadcrumbs if inside a folder
       if (currentFolderId) {
-        const bcRes = await fetch(`/api/folders/${currentFolderId}`);
-        if (bcRes.ok) {
-          const bcData = await bcRes.json();
-          setBreadcrumbs(
-            bcData.folder?.breadcrumbs || [{ id: null, name: "Home" }]
-          );
-        }
+        const bcData = await dedupFetch<{ folder?: { breadcrumbs: BreadcrumbItem[] } }>(
+          `/api/folders/${currentFolderId}`,
+          { signal }
+        );
+        setBreadcrumbs(
+          bcData.folder?.breadcrumbs || [{ id: null, name: "Home" }]
+        );
       } else {
         setBreadcrumbs([{ id: null, name: "Home" }]);
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      // ignore other errors
     } finally {
       setLoading(false);
     }
   }, [currentFolderId]);
 
-  const loadTrashCount = useCallback(async () => {
+  const loadTrashCount = useCallback(async (signal?: AbortSignal) => {
     if (!isAdmin) return;
     try {
-      const res = await fetch("/api/trash");
-      if (res.ok) {
-        const data = await res.json();
-        setTrashCount(data.total ?? 0);
-      }
-    } catch {
+      const data = await dedupFetch<{ total: number }>("/api/trash", { signal });
+      setTrashCount(data.total ?? 0);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       // ignore
     }
   }, [isAdmin]);
 
   useEffect(() => {
-    loadData();
-    loadTrashCount();
-  }, [loadData, loadTrashCount]);
+    // If server already hydrated root data, skip the mount-time fetch
+    if (hydratedRef.current && currentFolderId === null) {
+      hydratedRef.current = false; // Next folder change will fetch normally
+      // Still load trash count though
+      const tc = new AbortController();
+      loadTrashCount(tc.signal);
+      return () => tc.abort();
+    }
+
+    const controller = new AbortController();
+    loadData(controller.signal);
+    loadTrashCount(controller.signal);
+    return () => controller.abort();
+  }, [loadData, loadTrashCount, currentFolderId]);
 
   // ─── Upload Handler ───────────────────────────────────────────────
 

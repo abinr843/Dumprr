@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -20,7 +20,6 @@ const BASE_NAV_ITEMS = [
   { href: "/files", label: "Files", icon: FolderOpen },
   { href: "/posts", label: "Posts", icon: FileText },
   { href: "/recent", label: "Recent", icon: Clock },
-  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 const ADMIN_NAV_ITEMS = [
@@ -28,7 +27,7 @@ const ADMIN_NAV_ITEMS = [
   { href: "/files", label: "Files", icon: FolderOpen },
   { href: "/posts", label: "Posts", icon: FileText },
   { href: "/admin", label: "Admin", icon: Shield, isAdmin: true },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
 export function MobileNav({ userRole }: MobileNavProps) {

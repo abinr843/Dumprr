@@ -23,6 +23,8 @@ import type { PostRecord, PostWithAuthor } from "@/types/posts";
 
 interface PostsManagerProps {
   isAdmin: boolean;
+  /** Server-hydrated posts for the default tab — skips mount-time fetch */
+  initialPosts?: PostWithAuthor[];
 }
 
 type PostTab = "published" | "draft" | "archived" | "trash";
@@ -53,23 +55,25 @@ function timeAgo(dateStr: string): string {
   });
 }
 
-export function PostsManager({ isAdmin }: PostsManagerProps) {
-  const [posts, setPosts] = useState<PostWithAuthor[]>([]);
-  const [loading, setLoading] = useState(true);
+export function PostsManager({ isAdmin, initialPosts }: PostsManagerProps) {
+  const [posts, setPosts] = useState<PostWithAuthor[]>(initialPosts || []);
+  const [loading, setLoading] = useState(!initialPosts);
   const [activeTab, setActiveTab] = useState<PostTab>("published");
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<PostRecord | null>(null);
   const [viewPost, setViewPost] = useState<PostWithAuthor | null>(null);
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
+  const [hasHydrated, setHasHydrated] = useState(!!initialPosts);
 
-  const fetchPosts = useCallback(async () => {
+  const fetchPosts = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const status = activeTab === "published" ? "published" : activeTab;
-      const res = await fetch(`/api/posts?status=${status}`);
+      const res = await fetch(`/api/posts?status=${status}`, { signal });
       const data = await res.json();
       setPosts(data.posts || []);
-    } catch {
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setPosts([]);
     } finally {
       setLoading(false);
@@ -77,8 +81,16 @@ export function PostsManager({ isAdmin }: PostsManagerProps) {
   }, [activeTab]);
 
   useEffect(() => {
-    fetchPosts();
-  }, [fetchPosts]);
+    // On the first mount with "published" tab + initialPosts, skip the fetch
+    if (hasHydrated && activeTab === "published") {
+      setHasHydrated(false); // Next tab switch will fetch normally
+      return;
+    }
+
+    const controller = new AbortController();
+    fetchPosts(controller.signal);
+    return () => controller.abort();
+  }, [fetchPosts, activeTab, hasHydrated]);
 
   const handleDelete = async (postId: string) => {
     if (!confirm("Move this post to trash?")) return;

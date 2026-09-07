@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { ActivityFeed } from "@/components/feed/ActivityFeed";
 import { FeaturedAnnouncement } from "@/components/posts/FeaturedAnnouncement";
 import { getSession } from "@/lib/auth/session";
+import { getRecentFeed } from "@/lib/feed/recent";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAdmin } from "@/lib/auth/roles";
 import type { UserRole } from "@/types/database.types";
@@ -30,42 +31,43 @@ export default async function HomePage() {
 
   const adminClient = createAdminClient();
 
-  // Fetch file count & storage used
+  // Run all data fetches concurrently to minimize RSC render time
+  // Run all data fetches concurrently — including feed hydration data
+  const [filesResult, postsCountResult, latestPostResult, initialFeed] = await Promise.all([
+    // Fetch file count & storage used (select only size_bytes)
+    adminClient
+      .from("files")
+      .select("size_bytes")
+      .is("deleted_at", null)
+      .eq("status", "active"),
+    // Fetch published post count (head-only count query)
+    adminClient
+      .from("posts")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "published")
+      .is("deleted_at", null),
+    // Fetch latest published announcement
+    adminClient
+      .from("posts")
+      .select("id, title, excerpt, content, published_at, created_at, profiles:author_id(full_name, username)")
+      .eq("status", "published")
+      .is("deleted_at", null)
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .limit(1),
+    // Fetch feed data server-side for hydration (zero client HTTP on mount)
+    getRecentFeed({ limit: 10 }),
+  ]);
+
   let fileCount = 0;
   let totalBytes = 0;
-  const { data: filesData } = await adminClient
-    .from("files")
-    .select("size_bytes")
-    .is("deleted_at", null)
-    .eq("status", "active");
-
-  if (filesData) {
-    fileCount = filesData.length;
-    totalBytes = filesData.reduce((acc, f) => acc + (f.size_bytes || 0), 0);
+  if (filesResult.data) {
+    fileCount = filesResult.data.length;
+    totalBytes = filesResult.data.reduce((acc, f) => acc + (f.size_bytes || 0), 0);
   }
 
-  // Fetch published post count
-  let postCount = 0;
-  const { count: postsDataCount } = await adminClient
-    .from("posts")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "published")
-    .is("deleted_at", null);
+  const postCount = postsCountResult.count ?? 0;
 
-  if (postsDataCount != null) {
-    postCount = postsDataCount;
-  }
-
-  // Fetch latest published announcement for upfront visibility
-  const { data: latestPosts } = await adminClient
-    .from("posts")
-    .select("id, title, excerpt, content, published_at, created_at, profiles:author_id(full_name, username)")
-    .eq("status", "published")
-    .is("deleted_at", null)
-    .order("published_at", { ascending: false, nullsFirst: false })
-    .limit(1);
-
-  const latestPost = latestPosts && latestPosts[0] ? latestPosts[0] : null;
+  const latestPost = latestPostResult.data?.[0] ?? null;
   const authorProfile = latestPost?.profiles as unknown as { full_name?: string; username?: string } | null;
 
   return (
@@ -251,9 +253,9 @@ export default async function HomePage() {
           />
         </div>
 
-        {/* Unified Live Activity Feed */}
+        {/* Unified Live Activity Feed — hydrated with server data */}
         <Card>
-          <ActivityFeed isAdmin={userIsAdmin} />
+          <ActivityFeed isAdmin={userIsAdmin} initialFeed={initialFeed} limit={10} />
         </Card>
       </div>
     </LayoutShell>

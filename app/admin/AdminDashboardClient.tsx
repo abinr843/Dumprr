@@ -4,7 +4,6 @@ import React, { useState, useCallback } from "react";
 import {
   Shield,
   Users,
-  Activity,
   HardDrive,
   FileText,
   ShieldCheck,
@@ -176,7 +175,9 @@ export function AdminDashboardClient({
                 style={{ width: `${userPercent}%`, background: userColor }}
               />
             </div>
-            <div className="metric-note">{userPercent}% capacity used</div>
+            <div className="metric-note">
+              {userPercent}% capacity used · <Link href="/admin/users" className="metric-link">Manage users →</Link>
+            </div>
           </div>
         </div>
 
@@ -225,7 +226,9 @@ export function AdminDashboardClient({
                 style={{ width: `${storagePercent}%`, background: storageColor }}
               />
             </div>
-            <div className="metric-note">{storagePercent}% of quota used</div>
+            <div className="metric-note">
+              {storagePercent}% of quota used · <Link href="/admin/storage" className="metric-link">Storage details →</Link>
+            </div>
           </div>
         </div>
 
@@ -235,7 +238,7 @@ export function AdminDashboardClient({
             <TrendingUp size={20} />
           </div>
           <div className="metric-body">
-            <div className="metric-label">Today's Activity (24h)</div>
+            <div className="metric-label">Today&apos;s Activity (24h)</div>
             <div className="activity-pills">
               <div className="activity-pill activity-pill-uploads">
                 <UploadCloud size={13} />
@@ -285,7 +288,7 @@ export function AdminDashboardClient({
             { href: "/files", icon: <FolderOpen size={20} />, label: "Files & Folders", desc: "Upload, organize, and manage storage" },
             { href: "/audit-logs", icon: <ShieldCheck size={20} />, label: "Audit Logs", desc: "Full activity trail & security events" },
             { href: "/posts", icon: <FileText size={20} />, label: "Post Editor", desc: "Manage announcements & posts" },
-            { href: "/settings", icon: <SettingsIcon size={20} />, label: "System Settings", desc: "Configure platform options" },
+            { href: "/admin/settings", icon: <SettingsIcon size={20} />, label: "System Settings", desc: "Configure platform options" },
           ].map((item) => (
             <Link key={item.href} href={item.href} className="admin-nav-card">
               <div className="admin-nav-card-icon">{item.icon}</div>

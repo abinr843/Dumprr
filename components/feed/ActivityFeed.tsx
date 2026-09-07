@@ -64,41 +64,55 @@ interface ActivityFeedProps {
   isAdmin?: boolean;
   defaultFilter?: "all" | "posts" | "files";
   title?: string;
+  /** Server-hydrated feed data — when provided, skips client fetch on mount */
+  initialFeed?: RecentFeedResponse;
+  /** Max items to request on refresh (default 10) */
+  limit?: number;
 }
 
 export function ActivityFeed({
   isAdmin = false,
   defaultFilter = "all",
   title = "Recent Activity",
+  initialFeed,
+  limit = 10,
 }: ActivityFeedProps) {
-  const [feedData, setFeedData] = useState<RecentFeedResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [feedData, setFeedData] = useState<RecentFeedResponse | null>(
+    initialFeed || null
+  );
+  const [loading, setLoading] = useState(!initialFeed);
   const [refreshing, setRefreshing] = useState(false);
   const [feedFilter, setFeedFilter] = useState<"all" | "posts" | "files">(defaultFilter);
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
   const [viewPost, setViewPost] = useState<PostWithAuthor | null>(null);
 
-  const fetchFeed = useCallback(async (isRefresh = false) => {
+  const fetchFeed = useCallback(async (isRefresh = false, signal?: AbortSignal) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
-      const res = await fetch("/api/feed/recent?limit=30");
+      const res = await fetch(`/api/feed/recent?limit=${limit}`, { signal });
       if (res.ok) {
         const data: RecentFeedResponse = await res.json();
         setFeedData(data);
       }
     } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       console.error("Failed to load feed", e);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [limit]);
 
   useEffect(() => {
-    fetchFeed();
-  }, [fetchFeed]);
+    // If server provided initialFeed, skip the mount-time HTTP request entirely
+    if (initialFeed) return;
+
+    const controller = new AbortController();
+    fetchFeed(false, controller.signal);
+    return () => controller.abort();
+  }, [fetchFeed, initialFeed]);
 
   const handlePostClick = async (postId: string) => {
     try {

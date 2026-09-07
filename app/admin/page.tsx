@@ -22,10 +22,14 @@ function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
+function getSince24h() {
+  return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+}
+
 export default async function AdminDashboardPage() {
   const session = await requireAdmin();
   const admin = createAdminClient();
-  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const since24h = getSince24h();
 
   const [
     usersRes,
@@ -51,7 +55,7 @@ export default async function AdminDashboardPage() {
   const filesCount = filesRes.status === "fulfilled" ? (filesRes.value.count ?? 0) : 0;
   let storageUsed = 0;
   if (storageRes.status === "fulfilled" && storageRes.value.data) {
-    storageUsed = storageRes.value.data.reduce((s: number, f: any) => s + (f.size_bytes || 0), 0);
+    storageUsed = storageRes.value.data.reduce((s: number, f: { size_bytes: number | null }) => s + (f.size_bytes || 0), 0);
   }
   const postsCount = postsRes.status === "fulfilled" ? (postsRes.value.count ?? 0) : 0;
   const uploadsToday = uploadsRes.status === "fulfilled" ? (uploadsRes.value.count ?? 0) : 0;
