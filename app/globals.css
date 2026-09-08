@@ -173,6 +173,9 @@ ol {
   --z-modal: 400;
   --z-toast: 500;
 
+  /* --- Extended Shadows --- */
+  --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.18);
+
   color-scheme: light;
 }
 
@@ -209,6 +212,7 @@ ol {
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.6);
 
   color-scheme: dark;
 }
@@ -244,6 +248,7 @@ ol {
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+    --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.6);
 
     color-scheme: dark;
   }
@@ -638,4 +643,83 @@ div[style*="overflow-y: auto"] {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-strong);
+}
+
+/* ============================================================
+   14. GSAP / LENIS COMPATIBILITY
+   ============================================================ */
+
+/* Lenis requires html to NOT use overflow: hidden (it manages this itself) */
+html.lenis {
+  height: auto;
+}
+
+html.lenis body {
+  height: auto;
+}
+
+/* Prevent flash of unstyled content for GSAP-animated elements */
+[data-gsap-animate] {
+  will-change: transform, opacity;
+}
+
+/* ============================================================
+   15. ENHANCED RESPONSIVE BREAKPOINTS
+   ============================================================ */
+
+/* --- Tablet (769px – 1024px) --- */
+@media (min-width: 769px) and (max-width: 1024px) {
+  :root {
+    --sidebar-width: 220px;
+  }
+
+  /* Reduce padding density on tablets */
+  body {
+    font-size: var(--text-sm);
+  }
+}
+
+/* --- Large mobile / small tablet (481px – 640px) --- */
+@media (max-width: 640px) {
+  :root {
+    --topbar-height: 56px;
+    --mobile-nav-height: 62px;
+  }
+
+  /* Tighter grid on small screens */
+  .grid-auto-fit {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* --- Small mobile (≤ 480px) --- */
+@media (max-width: 480px) {
+  :root {
+    --space-6: 16px;
+    --space-8: 24px;
+  }
+}
+
+/* --- Landscape phone --- */
+@media (max-height: 480px) and (orientation: landscape) {
+  :root {
+    --topbar-height: 48px;
+    --mobile-nav-height: 54px;
+  }
+}
+
+/* ============================================================
+   16. PRINT
+   ============================================================ */
+@media print {
+  .sidebar,
+  .mobile-nav,
+  header,
+  .topbar {
+    display: none !important;
+  }
+  .main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
 }

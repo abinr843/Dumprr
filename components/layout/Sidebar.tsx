@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, useRef, useEffect } from "react";
 import {
   LayoutDashboard,
   FolderOpen,
@@ -53,6 +54,8 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarProps) {
   const pathname = usePathname();
+  const [infoVisible, setInfoVisible] = useState(false);
+  const infoRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = userRole === "admin" || userRole === "superadmin";
 
@@ -60,6 +63,17 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
   const usedGB = 1.2;
   const totalGB = 5.0;
   const percent = (usedGB / totalGB) * 100;
+
+  // Close info tooltip on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (infoRef.current && !infoRef.current.contains(e.target as Node)) {
+        setInfoVisible(false);
+      }
+    }
+    if (infoVisible) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [infoVisible]);
 
   return (
     <>
@@ -103,7 +117,7 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
             </>
           )}
 
-          {/* Main Navigation (Home, Files [both files and folders], Posts, Recent, Settings) */}
+          {/* Main Navigation */}
           {MAIN_NAV_ITEMS.map((item) => {
             const isActive =
               pathname === item.href ||
@@ -197,6 +211,29 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
             </Link>
           )}
 
+          {/* Info Icon — "Platform developed by Abin" */}
+          <div className="sidebar-info-btn-wrapper" ref={infoRef}>
+            <button
+              type="button"
+              className={`sidebar-info-btn ${collapsed ? "sidebar-info-btn-collapsed" : ""}`}
+              aria-label="Platform info"
+              title="Platform developed by Abin"
+              onMouseEnter={() => setInfoVisible(true)}
+              onMouseLeave={() => setInfoVisible(false)}
+              onClick={() => setInfoVisible((v) => !v)}
+            >
+              <Info size={14} />
+              {!collapsed && <span className="sidebar-info-btn-label">Platform info</span>}
+            </button>
+
+            {infoVisible && (
+              <div className={`sidebar-info-tooltip ${collapsed ? "sidebar-info-tooltip-collapsed" : ""}`} role="tooltip">
+                <span className="info-tooltip-dot" />
+                <span>Platform developed by <strong>Abin</strong></span>
+              </div>
+            )}
+          </div>
+
           {/* Collapse Toggle */}
           <button
             type="button"
@@ -234,7 +271,10 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
           z-index: var(--z-sticky);
           transition: width var(--transition-base);
           overflow: hidden;
+          overflow-y: auto;
+          scrollbar-width: none;
         }
+        .sidebar::-webkit-scrollbar { display: none; }
         .sidebar-collapsed {
           width: var(--sidebar-collapsed-width);
           padding: var(--space-4) var(--space-2);
@@ -246,6 +286,7 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
           gap: var(--space-3);
           padding: var(--space-2) var(--space-2);
           margin-bottom: var(--space-6);
+          flex-shrink: 0;
         }
         .sidebar-logo {
           display: flex;
@@ -337,6 +378,7 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
           gap: var(--space-2);
           padding-top: var(--space-3);
           border-top: 1px solid var(--border-subtle);
+          flex-shrink: 0;
         }
 
         .sidebar-storage {
@@ -504,6 +546,78 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
           border-color: rgba(99, 102, 241, 0.2);
         }
 
+        /* ---- Info button ---- */
+        .sidebar-info-btn-wrapper {
+          position: relative;
+          width: 100%;
+        }
+        .sidebar-info-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: 100%;
+          padding: 6px 10px;
+          border-radius: var(--radius-md);
+          color: var(--text-muted);
+          font-size: 11px;
+          font-weight: var(--font-medium);
+          background: none;
+          border: none;
+          cursor: pointer;
+          transition: all var(--transition-fast);
+          font-family: inherit;
+          box-sizing: border-box;
+        }
+        .sidebar-info-btn-collapsed {
+          justify-content: center;
+          padding: 6px 0;
+        }
+        .sidebar-info-btn:hover {
+          background: var(--bg-hover);
+          color: var(--color-primary);
+        }
+        .sidebar-info-btn-label {
+          font-size: 11px;
+        }
+        .sidebar-info-tooltip {
+          position: absolute;
+          bottom: calc(100% + 8px);
+          left: 8px;
+          right: 8px;
+          background: var(--bg-elevated, #1e293b);
+          border: 1px solid var(--border-default);
+          border-radius: var(--radius-md);
+          padding: 8px 12px;
+          font-size: 12px;
+          color: var(--text-primary);
+          white-space: nowrap;
+          box-shadow: var(--shadow-lg);
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          animation: tooltip-pop 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+          z-index: calc(var(--z-sticky) + 10);
+          pointer-events: none;
+        }
+        .sidebar-info-tooltip-collapsed {
+          left: 56px;
+          right: auto;
+          bottom: 0;
+          white-space: nowrap;
+        }
+        @keyframes tooltip-pop {
+          from { opacity: 0; transform: translateY(6px) scale(0.96); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .info-tooltip-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--color-primary);
+          flex-shrink: 0;
+          box-shadow: 0 0 6px var(--color-primary-glow);
+        }
+
         .sidebar-toggle {
           display: flex;
           align-items: center;
@@ -560,6 +674,7 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
           gap: 6px;
           padding: var(--space-2) var(--space-2) 0;
           margin-bottom: var(--space-1);
+          flex-wrap: wrap;
         }
         .sidebar-info-link {
           font-size: 11px;
@@ -586,4 +701,3 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
     </>
   );
 }
-

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { MobileNav } from "./MobileNav";
+import { SmoothScrollProvider } from "./SmoothScrollProvider";
 
 interface LayoutShellProps {
   children: React.ReactNode;
@@ -13,9 +14,32 @@ interface LayoutShellProps {
 
 export function LayoutShell({ children, userEmail, userRole }: LayoutShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
+
+  // GSAP page-entry animation — runs once on mount
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+
+    let cleanup: (() => void) | undefined;
+
+    (async () => {
+      const { gsap } = await import("gsap");
+      const ctx = gsap.context(() => {
+        gsap.fromTo(
+          el,
+          { opacity: 0, y: 14 },
+          { opacity: 1, y: 0, duration: 0.5, ease: "power3.out", clearProps: "all" }
+        );
+      }, el);
+      cleanup = () => ctx.revert();
+    })();
+
+    return () => cleanup?.();
+  }, []);
 
   return (
-    <>
+    <SmoothScrollProvider>
       {/* Desktop Sidebar */}
       <Sidebar
         collapsed={sidebarCollapsed}
@@ -33,6 +57,7 @@ export function LayoutShell({ children, userEmail, userRole }: LayoutShellProps)
 
       {/* Main Content Area */}
       <main
+        ref={mainRef}
         className={`main-content ${sidebarCollapsed ? "main-sidebar-collapsed" : ""}`}
       >
         {children}
@@ -48,10 +73,15 @@ export function LayoutShell({ children, userEmail, userRole }: LayoutShellProps)
           min-height: calc(100dvh - var(--topbar-height));
           padding: var(--space-6);
           transition: margin-left var(--transition-base);
-          animation: fadeIn var(--transition-base) ease-out;
         }
         .main-sidebar-collapsed {
           margin-left: var(--sidebar-collapsed-width);
+        }
+
+        @media (max-width: 1024px) {
+          .main-content {
+            padding: var(--space-5);
+          }
         }
 
         @media (max-width: 768px) {
@@ -66,7 +96,17 @@ export function LayoutShell({ children, userEmail, userRole }: LayoutShellProps)
             );
           }
         }
+
+        @media (max-width: 480px) {
+          .main-content {
+            padding: var(--space-3);
+            padding-bottom: calc(
+              var(--mobile-nav-height) + var(--space-4) +
+                env(safe-area-inset-bottom, 0px)
+            );
+          }
+        }
       `}</style>
-    </>
+    </SmoothScrollProvider>
   );
 }

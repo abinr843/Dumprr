@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Search, Bell, Plus, User, LogOut, Shield, UploadCloud, FileText as FileTextIcon } from "lucide-react";
+import { Search, Bell, Plus, User, LogOut, Shield, UploadCloud, FileText as FileTextIcon, Info } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { logoutAction } from "@/app/actions/auth";
 import { SearchModal } from "@/components/search/SearchModal";
@@ -23,9 +23,22 @@ export function Topbar({ sidebarCollapsed, userEmail, userRole }: TopbarProps) {
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [postEditorOpen, setPostEditorOpen] = useState(false);
+  const [infoVisible, setInfoVisible] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const adminMenuRef = useRef<HTMLDivElement>(null);
+  const infoRef = useRef<HTMLDivElement>(null);
   const userIsAdmin = userRole ? isAdmin(userRole as UserRole) : false;
+
+  // Close info tooltip on outside click
+  useEffect(() => {
+    function handleInfoClick(e: MouseEvent) {
+      if (infoRef.current && !infoRef.current.contains(e.target as Node)) {
+        setInfoVisible(false);
+      }
+    }
+    if (infoVisible) document.addEventListener("mousedown", handleInfoClick);
+    return () => document.removeEventListener("mousedown", handleInfoClick);
+  }, [infoVisible]);
 
 
   useEffect(() => {
@@ -138,7 +151,7 @@ export function Topbar({ sidebarCollapsed, userEmail, userRole }: TopbarProps) {
 
 
           <button
-            className="topbar-action-btn"
+            className="topbar-action-btn desktop-only"
             aria-label="Notifications"
             title="Notifications"
           >
@@ -148,7 +161,28 @@ export function Topbar({ sidebarCollapsed, userEmail, userRole }: TopbarProps) {
 
           <ThemeToggle />
 
-          <div className="topbar-user-wrapper" ref={menuRef}>
+          {/* Info icon — desktop only; mobile users have the drawer in MobileNav */}
+          <div className="topbar-info-wrapper desktop-only" ref={infoRef}>
+            <button
+              type="button"
+              className="topbar-action-btn topbar-info-btn"
+              aria-label="Platform info"
+              title="Platform developed by Abin"
+              onMouseEnter={() => setInfoVisible(true)}
+              onMouseLeave={() => setInfoVisible(false)}
+              onClick={() => setInfoVisible((v) => !v)}
+            >
+              <Info size={16} />
+            </button>
+            {infoVisible && (
+              <div className="topbar-info-tooltip" role="tooltip">
+                <span className="info-tooltip-dot" />
+                Platform developed by <strong>Abin</strong>
+              </div>
+            )}
+          </div>
+
+          <div className="topbar-user-wrapper desktop-only" ref={menuRef}>
             <button
               className="topbar-avatar"
               aria-label="User menu"
@@ -564,6 +598,48 @@ export function Topbar({ sidebarCollapsed, userEmail, userRole }: TopbarProps) {
           color: hsl(0, 70%, 60%);
         }
 
+        /* Info tooltip */
+        .topbar-info-wrapper {
+          position: relative;
+        }
+        .topbar-info-btn {
+          color: var(--text-muted);
+        }
+        .topbar-info-btn:hover {
+          color: var(--color-primary);
+        }
+        .topbar-info-tooltip {
+          position: absolute;
+          top: calc(100% + 8px);
+          right: 0;
+          background: var(--bg-surface);
+          border: 1px solid var(--border-default);
+          border-radius: var(--radius-md);
+          padding: 8px 14px;
+          font-size: 12px;
+          color: var(--text-primary);
+          white-space: nowrap;
+          box-shadow: var(--shadow-lg);
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          z-index: var(--z-dropdown);
+          animation: tooltip-pop 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+          pointer-events: none;
+        }
+        @keyframes tooltip-pop {
+          from { opacity: 0; transform: translateY(-4px) scale(0.96); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .info-tooltip-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--color-primary);
+          flex-shrink: 0;
+          box-shadow: 0 0 6px var(--color-primary-glow);
+        }
+
         @media (min-width: 769px) {
           .mobile-only {
             display: none !important;
@@ -589,6 +665,11 @@ export function Topbar({ sidebarCollapsed, userEmail, userRole }: TopbarProps) {
             font-size: var(--text-lg);
             font-weight: var(--font-bold);
             letter-spacing: -0.02em;
+          }
+          .topbar-info-tooltip {
+            right: 0;
+            left: auto;
+            max-width: calc(100vw - 32px);
           }
         }
       `}</style>
