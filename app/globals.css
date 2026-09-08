@@ -154,7 +154,7 @@ ol {
   --sidebar-width: 260px;
   --sidebar-collapsed-width: 72px;
   --topbar-height: 64px;
-  --mobile-nav-height: 68px;
+  --mobile-nav-height: 64px;
 
   /* --- Transitions --- */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -683,7 +683,7 @@ html.lenis body {
 @media (max-width: 640px) {
   :root {
     --topbar-height: 56px;
-    --mobile-nav-height: 62px;
+    --mobile-nav-height: 64px;
   }
 
   /* Tighter grid on small screens */

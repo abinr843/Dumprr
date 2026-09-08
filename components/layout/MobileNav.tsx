@@ -13,6 +13,8 @@ import {
   MoreHorizontal,
   X,
   Info,
+  ExternalLink,
+  Sparkles,
 } from "lucide-react";
 
 interface MobileNavProps {
@@ -40,7 +42,7 @@ export function MobileNav({ userRole }: MobileNavProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
 
-  // Close drawer when tapping outside
+  // Close drawer when tapping outside or pressing escape
   useEffect(() => {
     if (!drawerOpen) return;
     function onPointerDown(e: PointerEvent) {
@@ -48,110 +50,196 @@ export function MobileNav({ userRole }: MobileNavProps) {
         setDrawerOpen(false);
       }
     }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setDrawerOpen(false);
+    }
     document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [drawerOpen]);
+
+  // Lock body scroll when drawer is open
+  useEffect(() => {
+    if (drawerOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [drawerOpen]);
 
   return (
     <>
-      {/* ── Slide-up drawer (About · Privacy · Terms + credit) ── */}
+      {/* ── Backdrop ── */}
+      <div
+        className={`mobile-drawer-backdrop ${drawerOpen ? "backdrop-open" : ""}`}
+        onClick={() => setDrawerOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* ── Slide-up drawer (About · Privacy · Terms · Settings + credit) ── */}
       <div
         className={`mobile-drawer ${drawerOpen ? "mobile-drawer-open" : ""}`}
         ref={drawerRef}
-        aria-hidden={!drawerOpen}
+        aria-modal="true"
+        role="dialog"
+        aria-label="Navigation menu"
       >
-        <div className="mobile-drawer-handle" />
+        <div className="mobile-drawer-handle-bar">
+          <div className="mobile-drawer-handle" />
+        </div>
 
-        <div className="mobile-drawer-section">
-          <p className="mobile-drawer-label">Pages</p>
-          <div className="mobile-drawer-links">
-            <Link href="/about"   className="mobile-drawer-link" onClick={() => setDrawerOpen(false)}>
-              About
-            </Link>
-            <Link href="/privacy" className="mobile-drawer-link" onClick={() => setDrawerOpen(false)}>
-              Privacy
-            </Link>
-            <Link href="/terms"   className="mobile-drawer-link" onClick={() => setDrawerOpen(false)}>
-              Terms
-            </Link>
-            {isAdminUser && (
-              <Link href="/admin/settings" className="mobile-drawer-link" onClick={() => setDrawerOpen(false)}>
-                Settings
-              </Link>
-            )}
+        <div className="mobile-drawer-header">
+          <div className="mobile-drawer-title-group">
+            <span className="mobile-drawer-title">Workspace Navigation</span>
+            <span className="mobile-drawer-sub">Quick links & platform information</span>
           </div>
+          <button
+            type="button"
+            className="mobile-drawer-close-btn"
+            onClick={() => setDrawerOpen(false)}
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="mobile-drawer-grid">
+          <Link
+            href="/about"
+            className={`drawer-card ${pathname === "/about" ? "drawer-card-active" : ""}`}
+            onClick={() => setDrawerOpen(false)}
+          >
+            <div className="drawer-card-icon icon-info">
+              <Info size={18} />
+            </div>
+            <div className="drawer-card-text">
+              <span className="drawer-card-title">About</span>
+              <span className="drawer-card-desc">Platform & mission</span>
+            </div>
+          </Link>
+
+          <Link
+            href="/privacy"
+            className={`drawer-card ${pathname === "/privacy" ? "drawer-card-active" : ""}`}
+            onClick={() => setDrawerOpen(false)}
+          >
+            <div className="drawer-card-icon icon-shield">
+              <Shield size={18} />
+            </div>
+            <div className="drawer-card-text">
+              <span className="drawer-card-title">Privacy</span>
+              <span className="drawer-card-desc">Data & security</span>
+            </div>
+          </Link>
+
+          <Link
+            href="/terms"
+            className={`drawer-card ${pathname === "/terms" ? "drawer-card-active" : ""}`}
+            onClick={() => setDrawerOpen(false)}
+          >
+            <div className="drawer-card-icon icon-terms">
+              <FileText size={18} />
+            </div>
+            <div className="drawer-card-text">
+              <span className="drawer-card-title">Terms</span>
+              <span className="drawer-card-desc">User agreements</span>
+            </div>
+          </Link>
+
+          {isAdminUser ? (
+            <Link
+              href="/admin/settings"
+              className={`drawer-card ${pathname.startsWith("/admin/settings") ? "drawer-card-active" : ""}`}
+              onClick={() => setDrawerOpen(false)}
+            >
+              <div className="drawer-card-icon icon-settings">
+                <Settings size={18} />
+              </div>
+              <div className="drawer-card-text">
+                <span className="drawer-card-title">Settings</span>
+                <span className="drawer-card-desc">Admin controls</span>
+              </div>
+            </Link>
+          ) : (
+            <Link
+              href="/recent"
+              className={`drawer-card ${pathname === "/recent" ? "drawer-card-active" : ""}`}
+              onClick={() => setDrawerOpen(false)}
+            >
+              <div className="drawer-card-icon icon-recent">
+                <Clock size={18} />
+              </div>
+              <div className="drawer-card-text">
+                <span className="drawer-card-title">Timeline</span>
+                <span className="drawer-card-desc">Latest updates</span>
+              </div>
+            </Link>
+          )}
         </div>
 
         <div className="mobile-drawer-credit">
-          <span className="credit-dot" />
-          <span>Platform developed by <strong>Abin</strong></span>
-          <Info size={13} style={{ opacity: 0.5 }} />
+          <div className="credit-left">
+            <span className="credit-dot" />
+            <span className="credit-text">
+              Engineered & developed by <strong>Abin</strong>
+            </span>
+          </div>
+          <Sparkles size={14} className="credit-sparkle" />
         </div>
-
-        {/* Close row */}
-        <button
-          className="mobile-drawer-close"
-          onClick={() => setDrawerOpen(false)}
-          aria-label="Close menu"
-        >
-          <X size={16} />
-          Close
-        </button>
       </div>
-
-      {/* Backdrop */}
-      {drawerOpen && (
-        <div
-          className="mobile-drawer-backdrop"
-          onClick={() => setDrawerOpen(false)}
-          aria-hidden="true"
-        />
-      )}
 
       {/* ── Bottom tab bar ── */}
       <nav className="mobile-nav" aria-label="Mobile navigation">
-        {navItems.map((item) => {
-          const isActive =
-            pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(item.href));
+        <div className="mobile-nav-inner">
+          {navItems.map((item) => {
+            const isActive =
+              pathname === item.href ||
+              (item.href !== "/" && pathname.startsWith(item.href));
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`mnav-item ${isActive ? "mnav-active" : ""} ${"isAdmin" in item && item.isAdmin ? "mnav-admin" : ""}`}
-            >
-              <span className="mnav-icon-wrap">
-                <item.icon size={20} strokeWidth={isActive ? 2.2 : 1.7} />
-                {isActive && <span className="mnav-active-dot" />}
-              </span>
-              <span className="mnav-label">{item.label}</span>
-            </Link>
-          );
-        })}
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`mnav-item ${isActive ? "mnav-active" : ""} ${"isAdmin" in item && item.isAdmin ? "mnav-admin" : ""}`}
+              >
+                <div className="mnav-icon-box">
+                  <item.icon size={20} strokeWidth={isActive ? 2.3 : 1.8} />
+                  {isActive && <span className="mnav-active-glow" />}
+                </div>
+                <span className="mnav-label">{item.label}</span>
+              </Link>
+            );
+          })}
 
-        {/* More / drawer trigger */}
-        <button
-          type="button"
-          className={`mnav-item mnav-more ${drawerOpen ? "mnav-active" : ""}`}
-          aria-label="More options"
-          aria-expanded={drawerOpen}
-          onClick={() => setDrawerOpen((v) => !v)}
-        >
-          <span className="mnav-icon-wrap">
-            {drawerOpen ? (
-              <X size={20} strokeWidth={2.2} />
-            ) : (
-              <MoreHorizontal size={20} strokeWidth={1.7} />
-            )}
-          </span>
-          <span className="mnav-label">More</span>
-        </button>
+          {/* More drawer toggle button */}
+          <button
+            type="button"
+            className={`mnav-item mnav-more ${drawerOpen ? "mnav-active" : ""}`}
+            aria-label="More navigation options"
+            aria-expanded={drawerOpen}
+            onClick={() => setDrawerOpen((v) => !v)}
+          >
+            <div className="mnav-icon-box">
+              {drawerOpen ? (
+                <X size={20} strokeWidth={2.3} />
+              ) : (
+                <MoreHorizontal size={20} strokeWidth={1.8} />
+              )}
+            </div>
+            <span className="mnav-label">More</span>
+          </button>
+        </div>
       </nav>
 
       <style jsx>{`
         /* ─────────────────────────────────────────
-           BOTTOM TAB BAR
+           BOTTOM TAB BAR — Edge-to-edge frosted dock
         ───────────────────────────────────────── */
         .mobile-nav {
           display: none; /* hidden on desktop */
@@ -159,17 +247,31 @@ export function MobileNav({ userRole }: MobileNavProps) {
           bottom: 0;
           left: 0;
           right: 0;
-          height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
-          padding-bottom: env(safe-area-inset-bottom, 0px);
-          background: var(--bg-sidebar);
-          backdrop-filter: blur(20px) saturate(200%);
-          -webkit-backdrop-filter: blur(20px) saturate(200%);
-          border-top: 1px solid var(--border-subtle);
+          height: calc(64px + max(12px, env(safe-area-inset-bottom, 12px)));
+          padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+          background: rgba(11, 15, 26, 0.95);
+          backdrop-filter: blur(28px) saturate(200%);
+          -webkit-backdrop-filter: blur(28px) saturate(200%);
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
           z-index: var(--z-sticky);
+          box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        :global([data-theme="light"]) .mobile-nav {
+          background: rgba(255, 255, 255, 0.96);
+          border-top-color: rgba(0, 0, 0, 0.07);
+          box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.06);
+        }
+
+        .mobile-nav-inner {
+          display: flex;
           align-items: center;
           justify-content: space-around;
-          padding-left: env(safe-area-inset-left, 0px);
-          padding-right: env(safe-area-inset-right, 0px);
+          width: 100%;
+          height: 64px;
+          max-width: 500px;
+          margin: 0 auto;
+          padding: 0 var(--space-2);
         }
 
         .mnav-item {
@@ -178,235 +280,364 @@ export function MobileNav({ userRole }: MobileNavProps) {
           align-items: center;
           justify-content: center;
           flex: 1;
-          gap: 2px;
-          min-height: 48px;
+          gap: 3px;
+          height: 52px;
           min-width: 0;
-          max-width: 80px;
-          padding: 6px 4px;
-          border-radius: 10px;
+          max-width: 76px;
+          padding: 4px 2px;
+          border-radius: 12px;
           color: var(--text-muted);
           text-decoration: none;
-          background: none;
+          background: transparent;
           border: none;
           font-family: inherit;
           cursor: pointer;
           -webkit-tap-highlight-color: transparent;
           touch-action: manipulation;
           user-select: none;
-          transition: color var(--transition-fast);
+          transition: color 0.15s ease, transform 0.1s ease;
           position: relative;
-          overflow: visible;
-        }
-        .mnav-item:active {
-          transform: scale(0.88);
-          transition: transform 80ms;
         }
 
-        .mnav-icon-wrap {
+        .mnav-item:active {
+          transform: scale(0.92);
+        }
+
+        .mnav-icon-box {
           position: relative;
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 32px;
+          width: 38px;
           height: 28px;
-          border-radius: 8px;
-          transition: background var(--transition-fast);
-          flex-shrink: 0;
-        }
-        .mnav-active .mnav-icon-wrap {
-          background: var(--bg-active);
+          border-radius: 14px;
+          transition: background 0.2s ease, transform 0.2s ease;
         }
 
-        .mnav-active-dot {
+        .mnav-active .mnav-icon-box {
+          background: rgba(99, 102, 241, 0.16);
+        }
+
+        :global([data-theme="light"]) .mnav-active .mnav-icon-box {
+          background: rgba(99, 102, 241, 0.12);
+        }
+
+        .mnav-active-glow {
           position: absolute;
-          bottom: 1px;
+          bottom: -3px;
           left: 50%;
           transform: translateX(-50%);
-          width: 4px;
-          height: 4px;
+          width: 5px;
+          height: 5px;
           border-radius: 50%;
           background: var(--color-primary);
+          box-shadow: 0 0 10px var(--color-primary);
         }
 
         .mnav-label {
-          font-size: 9px;
+          font-size: 11px;
           font-weight: 600;
-          letter-spacing: 0.02em;
+          letter-spacing: 0.01em;
           white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          max-width: 60px;
           text-align: center;
+          line-height: 1.1;
+          transition: color 0.15s ease;
         }
 
         .mnav-active {
           color: var(--color-primary);
         }
-        .mnav-admin {
-          color: hsl(280, 70%, 60%);
+
+        .mnav-active .mnav-label {
+          color: var(--color-primary);
+          font-weight: 700;
         }
+
         .mnav-admin.mnav-active {
-          color: hsl(280, 85%, 65%);
+          color: #a855f7;
         }
-        .mnav-admin.mnav-active .mnav-icon-wrap {
-          background: hsla(280, 70%, 60%, 0.12);
+        .mnav-admin.mnav-active .mnav-icon-box {
+          background: rgba(168, 85, 247, 0.16);
         }
-        .mnav-admin .mnav-active-dot {
-          background: hsl(280, 70%, 60%);
+        .mnav-admin.mnav-active .mnav-active-glow {
+          background: #a855f7;
+          box-shadow: 0 0 10px #a855f7;
         }
 
         /* ─────────────────────────────────────────
-           SLIDE-UP DRAWER
+           SLIDE-UP DRAWER (ANCHORED AT BOTTOM: 0)
         ───────────────────────────────────────── */
         .mobile-drawer-backdrop {
-          display: none;
           position: fixed;
           inset: 0;
-          background: rgba(0, 0, 0, 0.4);
-          backdrop-filter: blur(4px);
-          -webkit-backdrop-filter: blur(4px);
-          z-index: calc(var(--z-sticky) + 1);
-          animation: fade-in-backdrop 0.2s ease;
+          background: rgba(0, 0, 0, 0.65);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          z-index: 9998;
+          opacity: 0;
+          visibility: hidden;
+          pointer-events: none;
+          transition: opacity 0.25s ease, visibility 0.25s ease;
+        }
+
+        .mobile-drawer-backdrop.backdrop-open {
+          opacity: 1;
+          visibility: visible;
+          pointer-events: auto;
         }
 
         .mobile-drawer {
-          display: none;
           position: fixed;
-          bottom: var(--mobile-nav-height);
+          bottom: 0;
           left: 0;
           right: 0;
-          background: var(--bg-surface);
-          border-top: 1px solid var(--border-default);
-          border-radius: 20px 20px 0 0;
-          padding: 0 var(--space-5) var(--space-5);
+          background: #0f1523;
+          border-top: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 28px 28px 0 0;
+          padding: 8px var(--space-5) max(28px, env(safe-area-inset-bottom, 24px));
+          display: flex;
           flex-direction: column;
           gap: var(--space-4);
-          z-index: calc(var(--z-sticky) + 2);
+          z-index: 9999;
           transform: translateY(100%);
-          transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-          box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.25);
+          opacity: 0;
+          visibility: hidden;
+          pointer-events: none;
+          transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+                      opacity 0.25s ease,
+                      visibility 0.25s ease;
+          box-shadow: 0 -12px 60px rgba(0, 0, 0, 0.7);
+          max-width: 600px;
+          margin: 0 auto;
         }
+
+        :global([data-theme="light"]) .mobile-drawer {
+          background: #ffffff;
+          border-top-color: rgba(0, 0, 0, 0.1);
+          box-shadow: 0 -12px 60px rgba(0, 0, 0, 0.15);
+        }
+
         .mobile-drawer-open {
           transform: translateY(0);
+          opacity: 1;
+          visibility: visible;
+          pointer-events: auto;
+        }
+
+        .mobile-drawer-handle-bar {
+          width: 100%;
+          display: flex;
+          justify-content: center;
+          padding: 8px 0 4px;
         }
 
         .mobile-drawer-handle {
-          width: 36px;
-          height: 4px;
-          border-radius: 2px;
-          background: var(--border-default);
-          margin: 12px auto 4px;
-          flex-shrink: 0;
+          width: 44px;
+          height: 5px;
+          border-radius: 3px;
+          background: rgba(255, 255, 255, 0.2);
         }
 
-        .mobile-drawer-section {
+        :global([data-theme="light"]) .mobile-drawer-handle {
+          background: rgba(0, 0, 0, 0.15);
+        }
+
+        .mobile-drawer-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 2px 2px 8px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        :global([data-theme="light"]) .mobile-drawer-header {
+          border-bottom-color: rgba(0, 0, 0, 0.06);
+        }
+
+        .mobile-drawer-title-group {
           display: flex;
           flex-direction: column;
-          gap: var(--space-2);
+          gap: 2px;
         }
 
-        .mobile-drawer-label {
-          font-size: 10px;
+        .mobile-drawer-title {
+          font-size: 16px;
           font-weight: 700;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
+          color: var(--text-primary);
+          letter-spacing: -0.01em;
+        }
+
+        .mobile-drawer-sub {
+          font-size: 11px;
           color: var(--text-muted);
-          margin: 0;
-          padding: 0 4px;
         }
 
-        .mobile-drawer-links {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: var(--space-2);
-        }
-
-        .mobile-drawer-link {
+        .mobile-drawer-close-btn {
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 10px var(--space-3);
-          border-radius: var(--radius-md);
-          background: var(--bg-card);
-          border: 1px solid var(--border-subtle);
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.08);
           color: var(--text-secondary);
-          font-size: 13px;
-          font-weight: 500;
-          text-decoration: none;
-          transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
-          -webkit-tap-highlight-color: transparent;
-          touch-action: manipulation;
+          border: none;
+          cursor: pointer;
+          transition: background 0.15s ease, color 0.15s ease;
         }
-        .mobile-drawer-link:active {
-          background: var(--bg-hover);
-          color: var(--color-primary);
-          border-color: var(--color-primary);
+
+        :global([data-theme="light"]) .mobile-drawer-close-btn {
+          background: rgba(0, 0, 0, 0.06);
+        }
+
+        .mobile-drawer-close-btn:active {
+          transform: scale(0.92);
+        }
+
+        .mobile-drawer-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+
+        .drawer-card {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 14px;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          text-decoration: none;
+          transition: all 0.2s ease;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        :global([data-theme="light"]) .drawer-card {
+          background: #f8fafc;
+          border-color: rgba(0, 0, 0, 0.07);
+        }
+
+        .drawer-card:active {
           transform: scale(0.97);
+          background: rgba(99, 102, 241, 0.1);
+          border-color: var(--color-primary);
+        }
+
+        .drawer-card-active {
+          border-color: rgba(99, 102, 241, 0.4);
+          background: rgba(99, 102, 241, 0.08);
+        }
+
+        .drawer-card-icon {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .icon-info {
+          background: rgba(59, 130, 246, 0.12);
+          color: #60a5fa;
+        }
+        .icon-shield {
+          background: rgba(16, 185, 129, 0.12);
+          color: #34d399;
+        }
+        .icon-terms {
+          background: rgba(245, 158, 11, 0.12);
+          color: #fbbf24;
+        }
+        .icon-settings {
+          background: rgba(168, 85, 247, 0.12);
+          color: #c084fc;
+        }
+        .icon-recent {
+          background: rgba(99, 102, 241, 0.12);
+          color: #818cf8;
+        }
+
+        .drawer-card-text {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 0;
+        }
+
+        .drawer-card-title {
+          font-size: 13.5px;
+          font-weight: 600;
+          color: var(--text-primary);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .drawer-card-desc {
+          font-size: 11px;
+          color: var(--text-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .mobile-drawer-credit {
           display: flex;
           align-items: center;
-          justify-content: center;
-          gap: 6px;
-          padding: 8px var(--space-4);
-          border-radius: var(--radius-md);
-          background: var(--bg-card);
-          border: 1px solid var(--border-subtle);
-          font-size: 11px;
-          color: var(--text-muted);
+          justify-content: space-between;
+          padding: 12px 16px;
+          border-radius: 14px;
+          background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%);
+          border: 1px solid rgba(99, 102, 241, 0.2);
         }
-        .mobile-drawer-credit strong {
+
+        .credit-left {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .credit-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #10b981;
+          box-shadow: 0 0 8px #10b981;
+          flex-shrink: 0;
+          animation: credit-pulse 2s infinite ease-in-out;
+        }
+
+        @keyframes credit-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .credit-text {
+          font-size: 12px;
+          color: var(--text-secondary);
+        }
+
+        .credit-text strong {
           color: var(--color-primary);
           font-weight: 700;
         }
 
-        .credit-dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          background: var(--color-primary);
-          flex-shrink: 0;
-          box-shadow: 0 0 6px var(--color-primary-glow);
+        .credit-sparkle {
+          color: #f59e0b;
+          animation: spin-sparkle 6s linear infinite;
         }
 
-        .mobile-drawer-close {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: var(--space-2);
-          width: 100%;
-          padding: 11px;
-          border-radius: var(--radius-md);
-          background: var(--bg-input);
-          border: 1px solid var(--border-subtle);
-          color: var(--text-secondary);
-          font-size: 13px;
-          font-weight: 600;
-          font-family: inherit;
-          cursor: pointer;
-          transition: background var(--transition-fast), color var(--transition-fast);
-          -webkit-tap-highlight-color: transparent;
-        }
-        .mobile-drawer-close:active {
-          background: var(--bg-hover);
-          color: var(--text-primary);
+        @keyframes spin-sparkle {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
 
-        @keyframes fade-in-backdrop {
-          from { opacity: 0; }
-          to   { opacity: 1; }
-        }
-
-        /* ── Show only on mobile ── */
+        /* ── Responsive breakpoint ── */
         @media (max-width: 768px) {
           .mobile-nav {
-            display: flex;
-          }
-          .mobile-drawer {
-            display: flex;
-          }
-          .mobile-drawer-backdrop {
             display: block;
           }
         }

@@ -72,6 +72,7 @@ export function Topbar({ sidebarCollapsed, userEmail, userRole }: TopbarProps) {
       >
         {/* Mobile brand (shown only on mobile) */}
         <div className="topbar-mobile-brand mobile-only">
+          <span className="topbar-brand-dot" />
           <span className="topbar-brand-text">DUMPR</span>
         </div>
 
@@ -660,11 +661,21 @@ export function Topbar({ sidebarCollapsed, userEmail, userRole }: TopbarProps) {
           }
           .topbar-mobile-brand {
             display: flex !important;
+            align-items: center;
+            gap: 8px;
+          }
+          .topbar-brand-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            box-shadow: 0 0 10px var(--color-primary);
           }
           .topbar-brand-text {
-            font-size: var(--text-lg);
-            font-weight: var(--font-bold);
+            font-size: 1.15rem;
+            font-weight: 800;
             letter-spacing: -0.02em;
+            color: var(--text-primary);
           }
           .topbar-info-tooltip {
             right: 0;

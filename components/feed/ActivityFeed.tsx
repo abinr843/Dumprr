@@ -250,10 +250,7 @@ export function ActivityFeed({
 
                     <div className="item-details">
                       <div className="item-title-row">
-                        <span className="item-title">{item.title}</span>
-                        <span className="item-time">
-                          {formatItemTime(item.timestamp)}
-                        </span>
+                        <h4 className="item-title">{item.title}</h4>
                       </div>
 
                       <div className="item-meta-row">
@@ -262,13 +259,16 @@ export function ActivityFeed({
                             <span className="file-badge">
                               {item.extension?.toUpperCase() || "FILE"}
                             </span>
+                            <span className="meta-info time-badge">
+                              {formatItemTime(item.timestamp)}
+                            </span>
                             <span className="meta-separator">•</span>
-                            <span className="meta-info">
+                            <span className="meta-info size-badge">
                               {formatBytes(item.sizeBytes)}
                             </span>
                             {item.uploaderName && (
                               <>
-                                <span className="meta-separator uploader-separator">•</span>
+                                <span className="meta-separator">•</span>
                                 <span className="meta-info uploader-text">
                                   by {item.uploaderName}
                                 </span>
@@ -277,7 +277,13 @@ export function ActivityFeed({
                           </>
                         ) : (
                           <>
-                            <span className="post-badge">ANNOUNCEMENT</span>
+                            <span className="post-badge">
+                              <span className="badge-glow-dot" />
+                              ANNOUNCEMENT
+                            </span>
+                            <span className="meta-info time-badge">
+                              {formatItemTime(item.timestamp)}
+                            </span>
                             {item.authorName && (
                               <>
                                 <span className="meta-separator author-separator">•</span>
@@ -286,17 +292,13 @@ export function ActivityFeed({
                                 </span>
                               </>
                             )}
-                            {item.description && (
-                              <>
-                                <span className="meta-separator">•</span>
-                                <span className="meta-info excerpt">
-                                  {item.description}
-                                </span>
-                              </>
-                            )}
                           </>
                         )}
                       </div>
+
+                      {item.description && (
+                        <p className="item-excerpt">{item.description}</p>
+                      )}
                     </div>
 
                     <div
@@ -312,7 +314,7 @@ export function ActivityFeed({
                             title="Preview file"
                             aria-label={`Preview ${item.title}`}
                           >
-                            <Eye size={15} />
+                            <Eye size={16} />
                           </button>
                           <a
                             href={`/api/files/${item.id}/download`}
@@ -321,7 +323,7 @@ export function ActivityFeed({
                             title="Download file"
                             aria-label={`Download ${item.title}`}
                           >
-                            <Download size={15} />
+                            <Download size={16} />
                           </a>
                         </>
                       )}
@@ -333,7 +335,7 @@ export function ActivityFeed({
                           title="Read announcement"
                           aria-label={`Read ${item.title}`}
                         >
-                          <ArrowRight size={15} />
+                          <ArrowRight size={16} />
                         </button>
                       )}
                     </div>
@@ -366,119 +368,151 @@ export function ActivityFeed({
         .activity-feed {
           display: flex;
           flex-direction: column;
-          gap: var(--space-4);
+          gap: var(--space-5);
         }
+
         .feed-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding-bottom: var(--space-2);
+          padding-bottom: var(--space-3);
+          border-bottom: 1px solid var(--border-subtle);
           flex-wrap: wrap;
           gap: var(--space-3);
         }
+
         .feed-title-area {
           display: flex;
           align-items: center;
-          gap: var(--space-3);
+          gap: 10px;
         }
+
         .feed-title {
-          font-size: var(--text-lg);
-          font-weight: var(--font-semibold);
+          font-size: 1.15rem;
+          font-weight: 700;
+          letter-spacing: -0.01em;
           color: var(--text-primary);
           margin: 0;
         }
+
         .live-indicator {
           display: inline-flex;
           align-items: center;
-          gap: 5px;
+          gap: 6px;
           font-size: 11px;
           font-weight: 700;
           text-transform: uppercase;
-          letter-spacing: 0.05em;
-          color: var(--color-primary);
-          background: rgba(99, 102, 241, 0.12);
-          padding: 2px 8px;
-          border-radius: var(--radius-full, 9999px);
+          letter-spacing: 0.06em;
+          color: #10b981;
+          background: rgba(16, 185, 129, 0.1);
+          border: 1px solid rgba(16, 185, 129, 0.25);
+          padding: 2px 9px;
+          border-radius: 9999px;
         }
+
         .live-dot {
           width: 6px;
           height: 6px;
           border-radius: 50%;
-          background: var(--color-primary);
-          box-shadow: 0 0 8px var(--color-primary);
+          background: #10b981;
+          box-shadow: 0 0 8px #10b981;
           animation: pulse 2s infinite ease-in-out;
         }
+
         @keyframes pulse {
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.4; transform: scale(0.85); }
         }
+
         .feed-header-controls {
           display: flex;
           align-items: center;
-          gap: var(--space-3);
+          gap: var(--space-2);
           flex-wrap: wrap;
         }
+
         .feed-filter-tabs {
           display: flex;
           align-items: center;
-          background: var(--bg-input);
+          background: rgba(0, 0, 0, 0.2);
           border: 1px solid var(--border-subtle);
-          border-radius: var(--radius-md);
+          border-radius: 12px;
           padding: 3px;
-          gap: 2px;
+          gap: 3px;
         }
+
+        :global([data-theme="light"]) .feed-filter-tabs {
+          background: #f1f5f9;
+        }
+
         .feed-filter-tab {
-          padding: 5px 12px;
-          border-radius: var(--radius-sm);
-          font-size: var(--text-xs);
-          font-weight: var(--font-medium);
+          padding: 6px 14px;
+          border-radius: 9px;
+          font-size: 12px;
+          font-weight: 500;
           color: var(--text-secondary);
           background: transparent;
           border: none;
           cursor: pointer;
-          transition: all var(--transition-fast);
+          transition: all 0.15s ease;
           display: inline-flex;
           align-items: center;
           gap: 4px;
           -webkit-tap-highlight-color: transparent;
+          user-select: none;
         }
+
         .feed-filter-tab:hover {
           color: var(--text-primary);
         }
+
         .feed-filter-tab.active {
           background: var(--bg-surface);
           color: var(--color-primary);
-          font-weight: var(--font-semibold);
-          box-shadow: var(--shadow-sm);
+          font-weight: 700;
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
         }
+
+        :global([data-theme="light"]) .feed-filter-tab.active {
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+
         .refresh-btn {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           gap: 6px;
-          padding: 6px 12px;
-          border-radius: var(--radius-md);
-          background: transparent;
+          padding: 7px 12px;
+          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.04);
           border: 1px solid var(--border-subtle);
           color: var(--text-secondary);
-          font-size: var(--text-xs);
+          font-size: 12px;
+          font-weight: 500;
           cursor: pointer;
-          transition: all var(--transition-fast);
+          transition: all 0.15s ease;
           -webkit-tap-highlight-color: transparent;
         }
+
+        :global([data-theme="light"]) .refresh-btn {
+          background: #ffffff;
+        }
+
         .refresh-btn:hover:not(:disabled) {
           background: var(--bg-hover);
           color: var(--text-primary);
           border-color: var(--border-default);
         }
+
+        .refresh-btn:active:not(:disabled) {
+          transform: scale(0.96);
+        }
+
         .refresh-btn:disabled {
           opacity: 0.5;
           cursor: not-allowed;
         }
-        .uploader-text,
-        .author-text {
-          font-weight: var(--font-medium);
-          color: var(--text-secondary);
-        }
+
         .feed-loading {
           display: flex;
           align-items: center;
@@ -488,6 +522,7 @@ export function ActivityFeed({
           color: var(--text-muted);
           font-size: var(--text-sm);
         }
+
         .feed-empty {
           display: flex;
           flex-direction: column;
@@ -498,87 +533,117 @@ export function ActivityFeed({
           color: var(--text-muted);
           gap: var(--space-2);
         }
+
         .empty-icon-wrap {
-          width: 52px;
-          height: 52px;
-          border-radius: var(--radius-full, 9999px);
-          background: var(--bg-input);
+          width: 54px;
+          height: 54px;
+          border-radius: 50%;
+          background: rgba(99, 102, 241, 0.1);
+          border: 1px solid rgba(99, 102, 241, 0.2);
           display: flex;
           align-items: center;
           justify-content: center;
           color: var(--color-primary);
           margin-bottom: var(--space-2);
         }
+
         .feed-empty h3 {
-          font-size: var(--text-base);
-          font-weight: var(--font-semibold);
+          font-size: 1rem;
+          font-weight: 600;
           color: var(--text-primary);
           margin: 0;
         }
+
         .feed-empty p {
-          font-size: var(--text-xs);
+          font-size: 12.5px;
           max-width: 320px;
           margin: 0;
+          line-height: 1.5;
         }
+
         .feed-groups {
           display: flex;
           flex-direction: column;
           gap: var(--space-6);
         }
+
         .feed-group {
           display: flex;
           flex-direction: column;
-          gap: var(--space-3);
+          gap: 10px;
         }
+
         .group-label {
           display: flex;
           align-items: center;
-          gap: var(--space-3);
-          font-size: var(--text-xs);
-          font-weight: var(--font-semibold);
+          gap: 12px;
+          font-size: 11px;
+          font-weight: 700;
           color: var(--text-muted);
           text-transform: uppercase;
-          letter-spacing: 0.05em;
+          letter-spacing: 0.08em;
+          padding: 2px 0;
         }
+
         .group-line {
           flex: 1;
           height: 1px;
-          background: var(--border-subtle);
+          background: linear-gradient(90deg, var(--border-subtle) 0%, transparent 100%);
         }
+
         .group-items {
           display: flex;
           flex-direction: column;
-          gap: var(--space-2);
+          gap: 8px;
         }
+
         .feed-item {
           display: flex;
-          align-items: center;
-          gap: var(--space-3);
-          padding: 10px 14px;
+          align-items: flex-start;
+          gap: 14px;
+          padding: 14px 16px;
           background: var(--bg-card);
           border: 1px solid var(--border-subtle);
-          border-radius: var(--radius-lg);
-          transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+          border-radius: 16px;
+          transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
           cursor: pointer;
-          min-height: 60px;
-          overflow: hidden;
+          -webkit-tap-highlight-color: transparent;
+          position: relative;
         }
+
         .feed-item:hover {
-          transform: translateY(-1px);
-          border-color: var(--border-strong);
-          box-shadow: var(--shadow-sm);
+          transform: translateY(-2px);
+          border-color: rgba(99, 102, 241, 0.4);
+          box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
         }
+
+        .feed-item:active {
+          transform: scale(0.99);
+        }
+
         .item-icon-wrapper {
-          width: 38px;
-          height: 38px;
-          border-radius: var(--radius-md);
-          background: var(--bg-input);
+          width: 40px;
+          height: 40px;
+          border-radius: 12px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid var(--border-subtle);
           display: flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
+          margin-top: 1px;
+          transition: transform 0.2s ease;
         }
-        .icon-post { color: #8b5cf6; }
+
+        :global([data-theme="light"]) .item-icon-wrapper {
+          background: #f8fafc;
+        }
+
+        .feed-item:hover .item-icon-wrapper {
+          transform: scale(1.05);
+        }
+
+        .icon-post { color: #a855f7; }
         .icon-image { color: #ec4899; }
         .icon-sheet { color: #10b981; }
         .icon-slides { color: #f59e0b; }
@@ -590,121 +655,168 @@ export function ActivityFeed({
           display: flex;
           flex-direction: column;
           gap: 4px;
-          overflow: hidden;
         }
+
         .item-title-row {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           justify-content: space-between;
-          gap: var(--space-2);
+          gap: 8px;
           min-width: 0;
         }
+
         .item-title {
-          font-size: var(--text-sm);
-          font-weight: var(--font-semibold);
+          font-size: 14.5px;
+          font-weight: 600;
           color: var(--text-primary);
+          line-height: 1.35;
+          margin: 0;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
           overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          min-width: 0;
+          word-break: break-word;
         }
-        .item-time {
-          font-size: 11px;
-          color: var(--text-muted);
-          flex-shrink: 0;
-          white-space: nowrap;
-        }
+
         .item-meta-row {
           display: flex;
           align-items: center;
-          gap: 6px;
-          font-size: var(--text-xs);
+          gap: 8px;
+          font-size: 11.5px;
           color: var(--text-muted);
-          min-width: 0;
-          white-space: nowrap;
-          overflow: hidden;
+          flex-wrap: wrap;
           line-height: 1.4;
+          margin-top: 2px;
         }
-        .meta-info {
-          white-space: nowrap;
-          flex-shrink: 0;
-        }
+
         .file-badge, .post-badge {
-          font-size: 10px;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 10.5px;
           font-weight: 700;
-          padding: 1px 5px;
-          border-radius: var(--radius-sm);
-          white-space: nowrap;
+          padding: 2px 7px;
+          border-radius: 6px;
+          letter-spacing: 0.04em;
           flex-shrink: 0;
+          line-height: 1;
         }
+
         .file-badge {
-          background: rgba(99, 102, 241, 0.1);
-          color: var(--color-primary);
+          background: rgba(59, 130, 246, 0.12);
+          border: 1px solid rgba(59, 130, 246, 0.28);
+          color: #93c5fd;
         }
+
+        :global([data-theme="light"]) .file-badge {
+          background: rgba(59, 130, 246, 0.1);
+          color: #2563eb;
+        }
+
         .post-badge {
-          background: rgba(139, 92, 246, 0.12);
-          color: #8b5cf6;
+          background: rgba(168, 85, 247, 0.14);
+          border: 1px solid rgba(168, 85, 247, 0.3);
+          color: #d8b4fe;
         }
+
+        :global([data-theme="light"]) .post-badge {
+          background: rgba(168, 85, 247, 0.1);
+          color: #7e22ce;
+        }
+
+        .badge-glow-dot {
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          background: #a855f7;
+          box-shadow: 0 0 6px #a855f7;
+        }
+
+        .time-badge {
+          font-weight: 500;
+          color: var(--text-secondary);
+        }
+
         .meta-separator {
-          color: var(--border-subtle);
+          color: var(--border-default);
           flex-shrink: 0;
           user-select: none;
         }
+
         .uploader-text,
         .author-text {
-          font-weight: var(--font-medium);
+          font-weight: 500;
           color: var(--text-secondary);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
           max-width: 140px;
-          flex-shrink: 1;
         }
-        .meta-info.excerpt {
-          max-width: 240px;
+
+        .item-excerpt {
+          font-size: 12.5px;
+          color: var(--text-secondary);
+          line-height: 1.45;
+          margin: 4px 0 0 0;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
           overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          flex-shrink: 1;
+          word-break: break-word;
         }
+
         .item-actions {
           display: flex;
           align-items: center;
-          gap: var(--space-2);
+          gap: 6px;
           flex-shrink: 0;
+          margin-top: 2px;
         }
+
         .feed-action-btn {
-          width: 32px;
-          height: 32px;
-          border-radius: var(--radius-md);
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          background: transparent;
+          background: rgba(255, 255, 255, 0.04);
           border: 1px solid var(--border-subtle);
           color: var(--text-secondary);
           cursor: pointer;
-          transition: all var(--transition-fast);
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
           text-decoration: none;
           flex-shrink: 0;
         }
+
+        :global([data-theme="light"]) .feed-action-btn {
+          background: #ffffff;
+        }
+
         .feed-action-btn:hover {
           background: var(--bg-hover);
           color: var(--text-primary);
           border-color: var(--border-default);
+          transform: scale(1.05);
         }
+
         .feed-action-btn.primary {
-          background: rgba(99, 102, 241, 0.1);
-          border-color: transparent;
+          background: rgba(99, 102, 241, 0.12);
+          border-color: rgba(99, 102, 241, 0.25);
           color: var(--color-primary);
         }
+
         .feed-action-btn.primary:hover {
           background: var(--color-primary);
-          color: var(--text-on-primary, #ffffff);
+          border-color: var(--color-primary);
+          color: #ffffff;
+          box-shadow: 0 4px 12px var(--color-primary-glow);
         }
+
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
+
         .spin {
           animation: spin 1s linear infinite;
         }
@@ -715,48 +827,60 @@ export function ActivityFeed({
             align-items: stretch;
             gap: var(--space-3);
           }
+
           .feed-header-controls {
             width: 100%;
+            display: flex;
+            align-items: center;
             justify-content: space-between;
           }
+
           .feed-filter-tabs {
             flex: 1;
-            justify-content: space-around;
+            justify-content: space-between;
           }
+
+          .feed-filter-tab {
+            flex: 1;
+            justify-content: center;
+            padding: 7px 4px;
+            font-size: 11.5px;
+          }
+
           .refresh-label {
             display: none;
           }
-          .feed-action-btn {
-            width: 34px;
-            height: 34px;
+
+          .refresh-btn {
+            width: 38px;
+            height: 38px;
+            padding: 0;
           }
         }
-        @media (max-width: 640px) {
-          .uploader-text,
-          .author-text {
-            max-width: 90px;
-          }
-          .meta-info.excerpt {
-            max-width: 130px;
-          }
-        }
+
         @media (max-width: 480px) {
           .feed-item {
-            padding: 8px 10px;
-            gap: 10px;
+            padding: 12px 12px;
+            gap: 12px;
+            border-radius: 14px;
           }
+
           .item-icon-wrapper {
-            width: 34px;
-            height: 34px;
+            width: 36px;
+            height: 36px;
           }
-          .item-time {
-            font-size: 10px;
+
+          .item-title {
+            font-size: 13.5px;
           }
-          .uploader-text,
-          .author-text,
-          .uploader-separator,
-          .author-separator {
-            display: none !important;
+
+          .item-actions {
+            margin-top: 0;
+          }
+
+          .feed-action-btn {
+            width: 32px;
+            height: 32px;
           }
         }
       `}</style>

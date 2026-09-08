@@ -1,5 +1,4 @@
 import { LayoutShell } from "@/components/layout/LayoutShell";
-import { Card } from "@/components/ui/Card";
 import { ActivityFeed } from "@/components/feed/ActivityFeed";
 import { getSession } from "@/lib/auth/session";
 import { getRecentFeed } from "@/lib/feed/recent";
@@ -58,15 +57,13 @@ export default async function RecentActivityPage() {
           </p>
         </div>
 
-        {/* Unified Activity Feed Card — hydrated with server data */}
-        <Card>
-          <ActivityFeed
-            isAdmin={userIsAdmin}
-            initialFeed={initialFeed}
-            limit={10}
-            title="All Timeline Items"
-          />
-        </Card>
+        {/* Activity Feed — hydrated with server data, full width on mobile without nested card borders */}
+        <ActivityFeed
+          isAdmin={userIsAdmin}
+          initialFeed={initialFeed}
+          limit={10}
+          title="All Timeline Items"
+        />
       </div>
     </LayoutShell>
   );

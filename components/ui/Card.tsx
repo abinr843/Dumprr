@@ -49,6 +49,15 @@ export function Card({
         .card-pad-lg {
           padding: var(--space-8);
         }
+
+        @media (max-width: 640px) {
+          .card-pad-md {
+            padding: 14px 16px;
+          }
+          .card-pad-lg {
+            padding: var(--space-5);
+          }
+        }
       `}</style>
     </>
   );

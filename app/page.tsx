@@ -254,9 +254,7 @@ export default async function HomePage() {
         </div>
 
         {/* Unified Live Activity Feed — hydrated with server data */}
-        <Card>
-          <ActivityFeed isAdmin={userIsAdmin} initialFeed={initialFeed} limit={10} />
-        </Card>
+        <ActivityFeed isAdmin={userIsAdmin} initialFeed={initialFeed} limit={10} />
       </div>
     </LayoutShell>
   );
