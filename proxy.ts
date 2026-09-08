@@ -2,7 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 
-// ─── Maintenance Mode Cache (30s TTL) ───────────────────────────────
+// ─── Maintenance Mode Cache (5-minute TTL) ──────────────────────────
+// Maintenance mode is a rare admin emergency toggle — a 5-minute cache
+// is safe and eliminates a ~150ms remote DB call on every page load.
 let maintenanceCache: { value: boolean; expiresAt: number } | null = null;
 
 async function isMaintenanceMode(): Promise<boolean> {
@@ -23,7 +25,7 @@ async function isMaintenanceMode(): Promise<boolean> {
       .single();
 
     const enabled = data?.value === "true" || data?.value === true;
-    maintenanceCache = { value: enabled, expiresAt: now + 30_000 };
+    maintenanceCache = { value: enabled, expiresAt: now + 300_000 };
     return enabled;
   } catch {
     // If we can't check, assume not in maintenance
@@ -44,7 +46,7 @@ async function isMaintenanceMode(): Promise<boolean> {
  *
  * Performance: Skips expensive supabase.auth.getUser() network call
  * for purely public routes that don't require auth checks.
- * Maintenance mode check uses 30s in-memory cache to avoid DB calls.
+ * Maintenance mode check uses 5-minute in-memory cache to avoid DB calls.
  */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

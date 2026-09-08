@@ -112,6 +112,7 @@ export function MobileNav({ userRole }: MobileNavProps) {
         <div className="mobile-drawer-grid">
           <Link
             href="/about"
+            prefetch={false}
             className={`drawer-card ${pathname === "/about" ? "drawer-card-active" : ""}`}
             onClick={() => setDrawerOpen(false)}
           >
@@ -126,6 +127,7 @@ export function MobileNav({ userRole }: MobileNavProps) {
 
           <Link
             href="/privacy"
+            prefetch={false}
             className={`drawer-card ${pathname === "/privacy" ? "drawer-card-active" : ""}`}
             onClick={() => setDrawerOpen(false)}
           >
@@ -140,6 +142,7 @@ export function MobileNav({ userRole }: MobileNavProps) {
 
           <Link
             href="/terms"
+            prefetch={false}
             className={`drawer-card ${pathname === "/terms" ? "drawer-card-active" : ""}`}
             onClick={() => setDrawerOpen(false)}
           >
@@ -155,6 +158,7 @@ export function MobileNav({ userRole }: MobileNavProps) {
           {isAdminUser ? (
             <Link
               href="/admin/settings"
+              prefetch={false}
               className={`drawer-card ${pathname.startsWith("/admin/settings") ? "drawer-card-active" : ""}`}
               onClick={() => setDrawerOpen(false)}
             >
@@ -169,6 +173,7 @@ export function MobileNav({ userRole }: MobileNavProps) {
           ) : (
             <Link
               href="/recent"
+              prefetch={false}
               className={`drawer-card ${pathname === "/recent" ? "drawer-card-active" : ""}`}
               onClick={() => setDrawerOpen(false)}
             >
@@ -206,6 +211,7 @@ export function MobileNav({ userRole }: MobileNavProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 className={`mnav-item ${isActive ? "mnav-active" : ""} ${"isAdmin" in item && item.isAdmin ? "mnav-admin" : ""}`}
               >
                 <div className="mnav-icon-box">

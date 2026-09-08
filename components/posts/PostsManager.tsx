@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Plus,
   FileText,
@@ -63,7 +63,7 @@ export function PostsManager({ isAdmin, initialPosts }: PostsManagerProps) {
   const [editingPost, setEditingPost] = useState<PostRecord | null>(null);
   const [viewPost, setViewPost] = useState<PostWithAuthor | null>(null);
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
-  const [hasHydrated, setHasHydrated] = useState(!!initialPosts);
+  const hydratedRef = useRef(!!initialPosts);
 
   const fetchPosts = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -82,15 +82,15 @@ export function PostsManager({ isAdmin, initialPosts }: PostsManagerProps) {
 
   useEffect(() => {
     // On the first mount with "published" tab + initialPosts, skip the fetch
-    if (hasHydrated && activeTab === "published") {
-      setHasHydrated(false); // Next tab switch will fetch normally
+    if (hydratedRef.current && activeTab === "published") {
+      hydratedRef.current = false; // Next tab switch will fetch normally
       return;
     }
 
     const controller = new AbortController();
     fetchPosts(controller.signal);
     return () => controller.abort();
-  }, [fetchPosts, activeTab, hasHydrated]);
+  }, [fetchPosts, activeTab]);
 
   const handleDelete = async (postId: string) => {
     if (!confirm("Move this post to trash?")) return;

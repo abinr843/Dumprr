@@ -99,6 +99,7 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
                   <Link
                     key={item.href}
                     href={item.href}
+                    prefetch={false}
                     className={`sidebar-link sidebar-link-admin ${
                       isActive ? "sidebar-link-active" : ""
                     }`}
@@ -126,6 +127,7 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 className={`sidebar-link ${isActive ? "sidebar-link-active" : ""}`}
                 title={collapsed ? item.label : undefined}
               >
@@ -142,11 +144,11 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
           {/* Info Links (About, Privacy, Terms) */}
           {!collapsed && (
             <div className="sidebar-info-links">
-              <Link href="/about" className="sidebar-info-link">About</Link>
+              <Link href="/about" prefetch={false} className="sidebar-info-link">About</Link>
               <span className="sidebar-info-dot">·</span>
-              <Link href="/privacy" className="sidebar-info-link">Privacy</Link>
+              <Link href="/privacy" prefetch={false} className="sidebar-info-link">Privacy</Link>
               <span className="sidebar-info-dot">·</span>
-              <Link href="/terms" className="sidebar-info-link">Terms</Link>
+              <Link href="/terms" prefetch={false} className="sidebar-info-link">Terms</Link>
             </div>
           )}
           {/* Storage Meter */}
@@ -203,6 +205,7 @@ export function Sidebar({ collapsed, onToggle, userRole, userEmail }: SidebarPro
           ) : (
             <Link
               href="/login"
+              prefetch={false}
               className="sidebar-logout sidebar-signin-link"
               title={collapsed ? "Sign in" : undefined}
             >

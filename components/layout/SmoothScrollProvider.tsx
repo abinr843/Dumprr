@@ -14,6 +14,8 @@ export function SmoothScrollProvider({ children }: { children: React.ReactNode }
     if (prefersReduced) return;
 
     let lenis: import("lenis").default | null = null;
+    let tickerFn: ((time: number) => void) | null = null;
+    let cancelled = false;
 
     async function init() {
       const [{ default: Lenis }, { gsap }, { ScrollTrigger }] = await Promise.all([
@@ -21,6 +23,9 @@ export function SmoothScrollProvider({ children }: { children: React.ReactNode }
         import("gsap"),
         import("gsap/ScrollTrigger"),
       ]);
+
+      // If component unmounted before imports resolved, bail out
+      if (cancelled) return;
 
       gsap.registerPlugin(ScrollTrigger);
 
@@ -37,9 +42,10 @@ export function SmoothScrollProvider({ children }: { children: React.ReactNode }
 
       // Sync Lenis RAF with GSAP ticker
       lenis.on("scroll", ScrollTrigger.update);
-      gsap.ticker.add((time: number) => {
+      tickerFn = (time: number) => {
         lenis?.raf(time * 1000);
-      });
+      };
+      gsap.ticker.add(tickerFn);
       gsap.ticker.lagSmoothing(0);
     }
 
@@ -48,9 +54,16 @@ export function SmoothScrollProvider({ children }: { children: React.ReactNode }
     });
 
     return () => {
+      cancelled = true;
+      if (tickerFn) {
+        import("gsap").then(({ gsap }) => {
+          gsap.ticker.remove(tickerFn!);
+        }).catch(() => {});
+      }
       lenis?.destroy();
     };
   }, []);
 
   return <>{children}</>;
 }
+
