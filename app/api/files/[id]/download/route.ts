@@ -36,6 +36,30 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
   const adminClient = createAdminClient();
 
+  // Maintenance mode check — block downloads when platform is under maintenance
+  try {
+    const { data: maintenanceSetting } = await adminClient
+      .from("system_settings")
+      .select("value")
+      .eq("key", "app.maintenance_mode")
+      .single();
+
+    const isMaintenanceOn =
+      maintenanceSetting?.value === "true" || maintenanceSetting?.value === true;
+
+    if (isMaintenanceOn) {
+      return NextResponse.json(
+        {
+          error: "Downloads are temporarily disabled during maintenance mode.",
+          maintenance: true,
+        },
+        { status: 503 }
+      );
+    }
+  } catch {
+    // If we can't check, allow the download to proceed
+  }
+
   // 1. Fetch active file record (IDOR: only active, non-deleted)
   const { data: file, error: dbError } = await adminClient
     .from("files")

@@ -7,6 +7,7 @@ import {
   Pencil,
   ArrowRightLeft,
   Trash2,
+  Check,
 } from "lucide-react";
 import { ActionContextMenu } from "./ActionContextMenu";
 import type { FolderWithStats } from "@/types/storage";
@@ -18,6 +19,10 @@ interface FolderCardProps {
   onRename?: (folder: FolderWithStats) => void;
   onMove?: (folder: FolderWithStats) => void;
   onDelete?: (folder: FolderWithStats) => void;
+  /** Multi-select support */
+  selected?: boolean;
+  onToggleSelect?: (folderId: string) => void;
+  selectionMode?: boolean;
 }
 
 export function FolderCard({
@@ -27,13 +32,19 @@ export function FolderCard({
   onRename,
   onMove,
   onDelete,
+  selected = false,
+  onToggleSelect,
+  selectionMode = false,
 }: FolderCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const [hovered, setHovered] = useState(false);
 
   const folderColor = folder.color || "#6366f1";
   const totalItems =
     (folder.childFolderCount ?? 0) + (folder.childFileCount ?? 0);
+
+  const showCheckbox = isAdmin && (selectionMode || selected || hovered);
 
   return (
     <div
@@ -47,28 +58,73 @@ export function FolderCard({
         }
       }}
       aria-label={`Open folder ${folder.name}`}
+      onMouseEnter={(e) => {
+        setHovered(true);
+        e.currentTarget.style.borderColor = selected
+          ? "var(--color-primary)"
+          : "var(--border-strong)";
+        e.currentTarget.style.transform = "translateY(-2px)";
+      }}
+      onMouseLeave={(e) => {
+        setHovered(false);
+        e.currentTarget.style.borderColor = selected
+          ? "var(--color-primary)"
+          : "var(--border-subtle)";
+        e.currentTarget.style.transform = "translateY(0)";
+      }}
       style={{
         position: "relative",
         padding: "var(--space-4)",
         borderRadius: "var(--radius-lg)",
-        backgroundColor: "var(--bg-card)",
+        backgroundColor: selected
+          ? "rgba(99, 102, 241, 0.06)"
+          : "var(--bg-card)",
         backdropFilter: "blur(12px)",
-        border: "1px solid var(--border-subtle)",
+        border: `1px solid ${
+          selected ? "var(--color-primary)" : "var(--border-subtle)"
+        }`,
         transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
         gap: "var(--space-2)",
       }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = "var(--border-strong)";
-        e.currentTarget.style.transform = "translateY(-2px)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = "var(--border-subtle)";
-        e.currentTarget.style.transform = "translateY(0)";
-      }}
     >
+      {/* Selection checkbox */}
+      {showCheckbox && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect?.(folder.id);
+          }}
+          style={{
+            position: "absolute",
+            top: 8,
+            left: 8,
+            width: 20,
+            height: 20,
+            borderRadius: "var(--radius-sm)",
+            border: selected
+              ? "none"
+              : "1.5px solid var(--text-muted)",
+            background: selected
+              ? "var(--color-primary)"
+              : "rgba(255,255,255,0.06)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+            zIndex: 5,
+            padding: 0,
+          }}
+          aria-label={selected ? "Deselect folder" : "Select folder"}
+        >
+          {selected && <Check size={13} color="#fff" strokeWidth={3} />}
+        </button>
+      )}
+
       {/* Folder Header: Icon + Name */}
       <div
         style={{

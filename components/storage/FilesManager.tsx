@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { dedupFetch } from "@/lib/client/fetch-dedup";
 import { ActionContextMenu } from "./ActionContextMenu";
 import {
@@ -24,6 +24,9 @@ import {
   LayoutGrid,
   List,
   ChevronRight,
+  Check,
+  X,
+  FolderInput,
 } from "lucide-react";
 import { AdminUploadZone } from "./AdminUploadZone";
 import { Breadcrumbs } from "./Breadcrumbs";
@@ -152,6 +155,41 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
   // Context menus
   const [fileMenuId, setFileMenuId] = useState<string | null>(null);
   const [folderMenuId, setFolderMenuId] = useState<string | null>(null);
+
+  // ─── Multi-Select State ──────────────────────────────────────────
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
+
+  const totalSelectedCount = selectedFiles.size + selectedFolders.size;
+  const selectionMode = totalSelectedCount > 0;
+
+  const toggleSelectFile = useCallback((id: string) => {
+    setSelectedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectFolder = useCallback((id: string) => {
+    setSelectedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedFiles(new Set());
+    setSelectedFolders(new Set());
+  }, []);
+
+  // Bulk move state
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
 
   // ─── Data Loading ─────────────────────────────────────────────────
@@ -256,7 +294,24 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
   const navigateToFolder = (folderId: string | null) => {
     setCurrentFolderId(folderId);
     setSearchQuery("");
+    clearSelection();
   };
+
+  // Clear selection on tab change
+  useEffect(() => {
+    clearSelection();
+  }, [activeTab, clearSelection]);
+
+  // Escape key clears selection
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectionMode) {
+        clearSelection();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selectionMode, clearSelection]);
 
   // ─── Action Handlers ─────────────────────────────────────────────
 
@@ -272,6 +327,59 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
     if (res.ok) {
       loadData();
       loadTrashCount();
+    }
+  };
+
+  // ─── Bulk Action Handlers ───────────────────────────────────────────
+
+  const handleBulkMove = async (destinationFolderId: string | null) => {
+    setBulkLoading(true);
+    try {
+      const res = await fetch("/api/storage/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "move",
+          fileIds: [...selectedFiles],
+          folderIds: [...selectedFolders],
+          destinationFolderId,
+        }),
+      });
+      if (res.ok || res.status === 207) {
+        clearSelection();
+        loadData();
+        loadTrashCount();
+      }
+    } catch {
+      // ignore
+    } finally {
+      setBulkLoading(false);
+      setBulkMoveOpen(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkLoading(true);
+    try {
+      const res = await fetch("/api/storage/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete",
+          fileIds: [...selectedFiles],
+          folderIds: [...selectedFolders],
+        }),
+      });
+      if (res.ok || res.status === 207) {
+        clearSelection();
+        loadData();
+        loadTrashCount();
+      }
+    } catch {
+      // ignore
+    } finally {
+      setBulkLoading(false);
+      setBulkDeleteOpen(false);
     }
   };
 
@@ -312,6 +420,27 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
     const q = searchQuery.toLowerCase().trim();
     return folders.filter((f) => f.name.toLowerCase().includes(q));
   }, [folders, searchQuery]);
+
+  // ─── Select All Visible Items ─────────────────────────────────────
+
+  const selectAll = useCallback(() => {
+    const allFileIds = new Set(filteredFiles.map((f) => f.id));
+    const allFolderIds = new Set(filteredFolders.map((f) => f.id));
+
+    // If all are already selected, deselect all
+    const allSelected =
+      allFileIds.size > 0 &&
+      allFolderIds.size >= 0 &&
+      [...allFileIds].every((id) => selectedFiles.has(id)) &&
+      [...allFolderIds].every((id) => selectedFolders.has(id));
+
+    if (allSelected) {
+      clearSelection();
+    } else {
+      setSelectedFiles(allFileIds);
+      setSelectedFolders(allFolderIds);
+    }
+  }, [filteredFiles, filteredFolders, selectedFiles, selectedFolders, clearSelection]);
 
   const totalBytes = useMemo(() => {
     return files.reduce((acc, f) => acc + (f.size_bytes || 0), 0);
@@ -732,6 +861,66 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
               viewMode === "list" && (
                 <div className="file-list-container">
                   <div className="file-list-header">
+                    {isAdmin && (
+                      <div
+                        className="file-col file-col-select"
+                        style={{
+                          width: "36px",
+                          flex: "0 0 36px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={selectAll}
+                          aria-label="Select all items"
+                          style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: "var(--radius-sm)",
+                            border:
+                              filteredFiles.length > 0 &&
+                              selectedFiles.size === filteredFiles.length &&
+                              (filteredFolders.length === 0 ||
+                                selectedFolders.size === filteredFolders.length)
+                                ? "none"
+                                : "1.5px solid var(--text-muted)",
+                            background:
+                              filteredFiles.length > 0 &&
+                              selectedFiles.size === filteredFiles.length &&
+                              (filteredFolders.length === 0 ||
+                                selectedFolders.size === filteredFolders.length)
+                                ? "var(--color-primary)"
+                                : totalSelectedCount > 0
+                                ? "var(--color-primary)"
+                                : "transparent",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
+                        >
+                          {filteredFiles.length > 0 &&
+                          selectedFiles.size === filteredFiles.length &&
+                          (filteredFolders.length === 0 ||
+                            selectedFolders.size === filteredFolders.length) ? (
+                            <Check size={12} color="#fff" strokeWidth={3} />
+                          ) : totalSelectedCount > 0 ? (
+                            <div
+                              style={{
+                                width: 8,
+                                height: 2,
+                                background: "#fff",
+                                borderRadius: 1,
+                              }}
+                            />
+                          ) : null}
+                        </button>
+                      </div>
+                    )}
                     <div className="file-col file-col-name">Name</div>
                     <div className="file-col file-col-size">Size / Items</div>
                     <div className="file-col file-col-date">Date</div>
@@ -745,15 +934,65 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
                       const totalItems =
                         (folder.childFolderCount ?? 0) +
                         (folder.childFileCount ?? 0);
+                      const isFolderSelected = selectedFolders.has(folder.id);
 
                       return (
                         <div
                           key={folder.id}
-                          className="file-list-row folder-row"
+                          className={`file-list-row folder-row ${
+                            isFolderSelected ? "selected-row" : ""
+                          }`}
                           onClick={() => navigateToFolder(folder.id)}
                           role="button"
                           tabIndex={0}
                         >
+                          {isAdmin && (
+                            <div
+                              className="file-col file-col-select"
+                              style={{
+                                width: "36px",
+                                flex: "0 0 36px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => toggleSelectFolder(folder.id)}
+                                aria-label={
+                                  isFolderSelected
+                                    ? "Deselect folder"
+                                    : "Select folder"
+                                }
+                                style={{
+                                  width: 18,
+                                  height: 18,
+                                  borderRadius: "var(--radius-sm)",
+                                  border: isFolderSelected
+                                    ? "none"
+                                    : "1.5px solid var(--text-muted)",
+                                  background: isFolderSelected
+                                    ? "var(--color-primary)"
+                                    : "transparent",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: "pointer",
+                                  padding: 0,
+                                }}
+                              >
+                                {isFolderSelected && (
+                                  <Check
+                                    size={12}
+                                    color="#fff"
+                                    strokeWidth={3}
+                                  />
+                                )}
+                              </button>
+                            </div>
+                          )}
                           <div className="file-col file-col-name">
                             <div
                               className="list-icon-wrapper"
@@ -837,15 +1076,65 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
                         file.extension ||
                         extractExtension(file.name) ||
                         "FILE";
+                      const isFileSelected = selectedFiles.has(file.id);
 
                       return (
                         <div
                           key={file.id}
-                          className="file-list-row file-row"
+                          className={`file-list-row file-row ${
+                            isFileSelected ? "selected-row" : ""
+                          }`}
                           onClick={() => setPreviewFileId(file.id)}
                           role="button"
                           tabIndex={0}
                         >
+                          {isAdmin && (
+                            <div
+                              className="file-col file-col-select"
+                              style={{
+                                width: "36px",
+                                flex: "0 0 36px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => toggleSelectFile(file.id)}
+                                aria-label={
+                                  isFileSelected
+                                    ? "Deselect file"
+                                    : "Select file"
+                                }
+                                style={{
+                                  width: 18,
+                                  height: 18,
+                                  borderRadius: "var(--radius-sm)",
+                                  border: isFileSelected
+                                    ? "none"
+                                    : "1.5px solid var(--text-muted)",
+                                  background: isFileSelected
+                                    ? "var(--color-primary)"
+                                    : "transparent",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: "pointer",
+                                  padding: 0,
+                                }}
+                              >
+                                {isFileSelected && (
+                                  <Check
+                                    size={12}
+                                    color="#fff"
+                                    strokeWidth={3}
+                                  />
+                                )}
+                              </button>
+                            </div>
+                          )}
                           <div className="file-col file-col-name">
                             <div className="list-icon-wrapper">
                               {getFileIcon(file.name)}
@@ -960,6 +1249,9 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
                           folder={folder}
                           isAdmin={isAdmin}
                           onOpen={navigateToFolder}
+                          selected={selectedFolders.has(folder.id)}
+                          onToggleSelect={toggleSelectFolder}
+                          selectionMode={selectionMode}
                           onRename={(f) =>
                             setRenameTarget({
                               type: "folder",
@@ -987,46 +1279,107 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
                     </div>
                   )}
 
-                  {/* Files Grid */}
-                  {filteredFiles.length > 0 && (
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fill, minmax(min(100%, 260px), 1fr))",
-                        gap: "var(--space-4)",
-                      }}
-                    >
-                      {filteredFiles.map((file) => (
-                        <div
-                          key={file.id}
-                          style={{
-                            position: "relative",
-                            display: "flex",
-                            flexDirection: "column",
-                            justifyContent: "space-between",
-                            padding: "var(--space-4)",
-                            borderRadius: "var(--radius-lg)",
-                            backgroundColor: "var(--bg-card)",
-                            backdropFilter: "blur(12px)",
-                            border: "1px solid var(--border-subtle)",
-                            transition:
-                              "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-                            gap: "var(--space-3)",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor =
-                              "var(--border-strong)";
-                            e.currentTarget.style.transform =
-                              "translateY(-2px)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor =
-                              "var(--border-subtle)";
-                            e.currentTarget.style.transform = "translateY(0)";
-                          }}
-                        >
-                          {/* Header: Icon + Title + Extension Badge */}
+                    {/* Files Grid */}
+                    {filteredFiles.length > 0 && (
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fill, minmax(min(100%, 260px), 1fr))",
+                          gap: "var(--space-4)",
+                        }}
+                      >
+                        {filteredFiles.map((file) => {
+                          const isFileSelected = selectedFiles.has(file.id);
+                          const showCheckbox =
+                            isAdmin && (selectionMode || isFileSelected);
+
+                          return (
+                            <div
+                              key={file.id}
+                              className="file-grid-card"
+                              style={{
+                                position: "relative",
+                                display: "flex",
+                                flexDirection: "column",
+                                justifyContent: "space-between",
+                                padding: "var(--space-4)",
+                                borderRadius: "var(--radius-lg)",
+                                backgroundColor: isFileSelected
+                                  ? "rgba(99, 102, 241, 0.06)"
+                                  : "var(--bg-card)",
+                                backdropFilter: "blur(12px)",
+                                border: `1px solid ${
+                                  isFileSelected
+                                    ? "var(--color-primary)"
+                                    : "var(--border-subtle)"
+                                }`,
+                                transition:
+                                  "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
+                                gap: "var(--space-3)",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = isFileSelected
+                                  ? "var(--color-primary)"
+                                  : "var(--border-strong)";
+                                e.currentTarget.style.transform =
+                                  "translateY(-2px)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = isFileSelected
+                                  ? "var(--color-primary)"
+                                  : "var(--border-subtle)";
+                                e.currentTarget.style.transform =
+                                  "translateY(0)";
+                              }}
+                            >
+                              {/* Selection checkbox */}
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleSelectFile(file.id);
+                                  }}
+                                  className="file-card-checkbox"
+                                  style={{
+                                    position: "absolute",
+                                    top: 8,
+                                    left: 8,
+                                    width: 20,
+                                    height: 20,
+                                    borderRadius: "var(--radius-sm)",
+                                    border: isFileSelected
+                                      ? "none"
+                                      : "1.5px solid var(--text-muted)",
+                                    background: isFileSelected
+                                      ? "var(--color-primary)"
+                                      : "rgba(255,255,255,0.06)",
+                                    display: showCheckbox ? "flex" : "none",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    cursor: "pointer",
+                                    transition: "all 0.15s ease",
+                                    zIndex: 5,
+                                    padding: 0,
+                                  }}
+                                  aria-label={
+                                    isFileSelected
+                                      ? "Deselect file"
+                                      : "Select file"
+                                  }
+                                >
+                                  {isFileSelected && (
+                                    <Check
+                                      size={13}
+                                      color="#fff"
+                                      strokeWidth={3}
+                                    />
+                                  )}
+                                </button>
+                              )}
+
+                              {/* Header: Icon + Title + Extension Badge */}
                           <div
                             style={{
                               display: "flex",
@@ -1237,7 +1590,8 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
                             </div>
                           </div>
                         </div>
-                      ))}
+                      );
+                    })}
                     </div>
                   )}
                 </>
@@ -1302,7 +1656,204 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
         />
       )}
 
+      {/* Bulk Move Modal */}
+      {bulkMoveOpen && (
+        <MoveModal
+          open={bulkMoveOpen}
+          onClose={() => setBulkMoveOpen(false)}
+          items={[
+            ...[...selectedFiles].map((id) => ({
+              id,
+              type: "file" as const,
+              name: filteredFiles.find((f) => f.id === id)?.name || "File",
+            })),
+            ...[...selectedFolders].map((id) => ({
+              id,
+              type: "folder" as const,
+              name: filteredFolders.find((f) => f.id === id)?.name || "Folder",
+            })),
+          ]}
+          onBulkMove={handleBulkMove}
+          onMoved={() => {
+            clearSelection();
+            loadData();
+          }}
+        />
+      )}
+
+      {/* Bulk Delete Modal */}
+      {bulkDeleteOpen && (
+        <ConfirmDeleteModal
+          open={bulkDeleteOpen}
+          onClose={() => setBulkDeleteOpen(false)}
+          title={`Move ${totalSelectedCount} items to Trash?`}
+          message={`Are you sure you want to move ${totalSelectedCount} item${
+            totalSelectedCount > 1 ? "s" : ""
+          } (${selectedFiles.size} file${
+            selectedFiles.size !== 1 ? "s" : ""
+          }, ${selectedFolders.size} folder${
+            selectedFolders.size !== 1 ? "s" : ""
+          }) to the trash? You can restore them later.`}
+          confirmLabel={bulkLoading ? "Moving to Trash..." : "Move to Trash"}
+          onConfirm={handleBulkDelete}
+        />
+      )}
+
+      {/* Floating Bulk Action Toolbar */}
+      {isAdmin && totalSelectedCount > 0 && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 24,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 900,
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            padding: "8px 16px",
+            borderRadius: "var(--radius-full, 9999px)",
+            backgroundColor: "var(--bg-elevated)",
+            border: "1px solid var(--border-strong)",
+            boxShadow: "0 12px 36px rgba(0, 0, 0, 0.35)",
+            backdropFilter: "blur(16px)",
+            animation: "slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              paddingRight: "8px",
+              borderRight: "1px solid var(--border-subtle)",
+              fontSize: "var(--text-sm)",
+              fontWeight: 600,
+              color: "var(--text-primary)",
+            }}
+          >
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                background: "var(--color-primary)",
+                color: "#fff",
+                fontSize: "12px",
+                fontWeight: 700,
+              }}
+            >
+              {totalSelectedCount}
+            </span>
+            <span>
+              {totalSelectedCount === 1
+                ? "1 item selected"
+                : `${totalSelectedCount} items selected`}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setBulkMoveOpen(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "6px 12px",
+              borderRadius: "var(--radius-md)",
+              backgroundColor: "rgba(99, 102, 241, 0.12)",
+              color: "var(--color-primary)",
+              border: "1px solid rgba(99, 102, 241, 0.25)",
+              fontSize: "var(--text-xs)",
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor =
+                "rgba(99, 102, 241, 0.22)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor =
+                "rgba(99, 102, 241, 0.12)";
+            }}
+          >
+            <FolderInput size={14} />
+            Move
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setBulkDeleteOpen(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "6px 12px",
+              borderRadius: "var(--radius-md)",
+              backgroundColor: "rgba(239, 68, 68, 0.12)",
+              color: "var(--color-danger, #ef4444)",
+              border: "1px solid rgba(239, 68, 68, 0.25)",
+              fontSize: "var(--text-xs)",
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor =
+                "rgba(239, 68, 68, 0.22)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor =
+                "rgba(239, 68, 68, 0.12)";
+            }}
+          >
+            <Trash2 size={14} />
+            Delete
+          </button>
+
+          <button
+            type="button"
+            onClick={clearSelection}
+            title="Clear selection (Esc)"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 28,
+              height: 28,
+              borderRadius: "50%",
+              backgroundColor: "transparent",
+              color: "var(--text-muted)",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+              transition: "background 0.15s ease, color 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "var(--bg-input)";
+              e.currentTarget.style.color = "var(--text-primary)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+              e.currentTarget.style.color = "var(--text-muted)";
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       <style jsx>{`
+        .selected-row {
+          background-color: rgba(99, 102, 241, 0.08) !important;
+        }
+        :global(.file-grid-card:hover .file-card-checkbox) {
+          display: flex !important;
+        }
         .file-list-container {
           border-radius: var(--radius-lg);
           background: var(--bg-card);

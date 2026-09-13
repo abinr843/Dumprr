@@ -499,11 +499,14 @@ export function RenameModal({
 interface MoveModalProps {
   open: boolean;
   onClose: () => void;
-  itemType: "file" | "folder";
-  itemId: string;
-  itemName: string;
-  currentParentId: string | null;
-  onMoved: () => void;
+  itemType?: "file" | "folder";
+  itemId?: string;
+  itemName?: string;
+  currentParentId?: string | null;
+  onMoved?: () => void;
+  /** Bulk move support */
+  items?: Array<{ id: string; type: "file" | "folder"; name: string }>;
+  onBulkMove?: (destinationFolderId: string | null) => Promise<void>;
 }
 
 export function MoveModal({
@@ -514,12 +517,29 @@ export function MoveModal({
   itemName,
   currentParentId,
   onMoved,
+  items,
+  onBulkMove,
 }: MoveModalProps) {
   const [folders, setFolders] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingTree, setLoadingTree] = useState(false);
   const [error, setError] = useState("");
+
+  const isBulk = Boolean(items && items.length > 0);
+  const excludedFolderIds = new Set(
+    items
+      ? items.filter((i) => i.type === "folder").map((i) => i.id)
+      : itemId && itemType === "folder"
+      ? [itemId]
+      : []
+  );
+
+  const modalTitle = isBulk
+    ? items!.length === 1
+      ? `Move "${items![0].name}"`
+      : `Move ${items!.length} items`
+    : `Move "${itemName || "item"}"`;
 
   useEffect(() => {
     if (open) {
@@ -545,7 +565,7 @@ export function MoveModal({
   };
 
   const handleMove = async () => {
-    if (selectedId === currentParentId) {
+    if (!isBulk && selectedId === currentParentId) {
       onClose();
       return;
     }
@@ -554,6 +574,14 @@ export function MoveModal({
     setError("");
 
     try {
+      if (isBulk && onBulkMove) {
+        await onBulkMove(selectedId);
+        onClose();
+        return;
+      }
+
+      if (!itemId || !itemType) return;
+
       const endpoint =
         itemType === "file"
           ? `/api/files/${itemId}`
@@ -576,7 +604,7 @@ export function MoveModal({
         return;
       }
 
-      onMoved();
+      onMoved?.();
       onClose();
     } catch {
       setError("Network error.");
@@ -589,7 +617,7 @@ export function MoveModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={`Move "${itemName}"`}
+      title={modalTitle}
       icon={
         <ArrowRightLeft size={18} style={{ color: "var(--color-primary)" }} />
       }
@@ -662,7 +690,7 @@ export function MoveModal({
           )}
 
           {folders
-            .filter((f) => f.id !== itemId) // Can't move into itself
+            .filter((f) => !excludedFolderIds.has(f.id))
             .map((folder) => (
               <button
                 key={folder.id}

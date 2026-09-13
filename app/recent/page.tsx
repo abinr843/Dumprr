@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { LayoutShell } from "@/components/layout/LayoutShell";
 import { ActivityFeed } from "@/components/feed/ActivityFeed";
 import { getSession } from "@/lib/auth/session";
@@ -11,12 +12,13 @@ export const metadata = {
 };
 
 export default async function RecentActivityPage() {
-  // Parallelize auth + feed data fetch — eliminates the sequential waterfall
-  const [session, initialFeed] = await Promise.all([
-    getSession(),
-    getRecentFeed({ limit: 10 }),
-  ]);
+  const session = await getSession();
 
+  if (!session?.user) {
+    redirect("/login?redirectTo=/recent");
+  }
+
+  const initialFeed = await getRecentFeed({ limit: 10 });
   const userIsAdmin = session?.profile
     ? isAdmin(session.profile.role as UserRole)
     : false;

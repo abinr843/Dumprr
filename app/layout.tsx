@@ -28,22 +28,16 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      data-theme="dark"
       data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
       <head>
-        <link
-          rel="preconnect"
-          href="https://fonts.googleapis.com"
-        />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;0,14..32,900&display=swap"
         />
       </head>
       <body suppressHydrationWarning>
@@ -55,10 +49,11 @@ export default function RootLayout({
               (function() {
                 try {
                   var theme = localStorage.getItem('dumpr-theme');
-                  if (theme === 'dark' || theme === 'light') {
-                    document.documentElement.setAttribute('data-theme', theme);
-                  }
-                } catch (e) {}
+                  // Default to dark if no preference stored
+                  document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
+                } catch (e) {
+                  document.documentElement.setAttribute('data-theme', 'dark');
+                }
               })();
             `,
           }}
@@ -68,3 +63,4 @@ export default function RootLayout({
     </html>
   );
 }
+

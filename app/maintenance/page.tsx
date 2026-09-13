@@ -1,8 +1,46 @@
 "use client";
 
+import { useEffect, useState, useCallback } from "react";
+
 /* Metadata is set via the parent layout */
 
 export default function MaintenancePage() {
+  const [checking, setChecking] = useState(false);
+
+  const checkAndRedirect = useCallback(async () => {
+    setChecking(true);
+    try {
+      const res = await fetch("/api/maintenance/status", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (!data.maintenance) {
+          // Maintenance is off — redirect to home immediately
+          window.location.href = "/";
+          return;
+        }
+      }
+    } catch {
+      // ignore network errors
+    } finally {
+      setChecking(false);
+    }
+  }, []);
+
+  // Auto-poll every 30 seconds and on window focus
+  useEffect(() => {
+    const interval = setInterval(checkAndRedirect, 30000);
+
+    const handleFocus = () => {
+      checkAndRedirect();
+    };
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [checkAndRedirect]);
+
   return (
     <>
       <div className="maintenance-container">
@@ -35,6 +73,19 @@ export default function MaintenancePage() {
             <p className="maintenance-admin-hint">
               Administrators can still access the platform to manage settings.
             </p>
+          </div>
+
+          <button
+            onClick={checkAndRedirect}
+            disabled={checking}
+            className="maintenance-check-btn"
+          >
+            {checking ? "Checking..." : "Check Again ↻"}
+          </button>
+
+          <div className="maintenance-auto-check">
+            <span className="maintenance-pulse-dot" />
+            Auto-checking every few seconds...
           </div>
 
           <a href="/login" className="maintenance-login-link">
@@ -135,9 +186,53 @@ export default function MaintenancePage() {
           color: rgba(255, 255, 255, 0.25);
         }
 
-        .maintenance-login-link {
+        .maintenance-check-btn {
           display: inline-block;
           margin-top: 1.25rem;
+          padding: 0.6rem 1.5rem;
+          border-radius: 10px;
+          background: rgba(99, 102, 241, 0.15);
+          border: 1px solid rgba(99, 102, 241, 0.3);
+          color: rgba(199, 202, 255, 0.85);
+          font-size: 0.85rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .maintenance-check-btn:hover:not(:disabled) {
+          background: rgba(99, 102, 241, 0.25);
+          border-color: rgba(99, 102, 241, 0.5);
+          color: rgba(255, 255, 255, 0.95);
+        }
+        .maintenance-check-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .maintenance-auto-check {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          margin-top: 0.75rem;
+          font-size: 0.72rem;
+          color: rgba(255, 255, 255, 0.25);
+        }
+        .maintenance-pulse-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: rgba(16, 185, 129, 0.6);
+          animation: dot-pulse 2s ease-in-out infinite;
+        }
+        @keyframes dot-pulse {
+          0%, 100% { opacity: 0.4; transform: scale(0.8); }
+          50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        .maintenance-login-link {
+          display: inline-block;
+          margin-top: 1rem;
           padding: 0.6rem 1.5rem;
           border-radius: 10px;
           background: rgba(255, 255, 255, 0.06);

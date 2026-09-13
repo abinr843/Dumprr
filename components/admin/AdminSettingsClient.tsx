@@ -194,6 +194,16 @@ const SECTIONS: { title: string; description: string; icon: React.ReactNode; set
   },
 ];
 
+function formatTime(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) {
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  }
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+}
+
 // ─── Component ──────────────────────────────────────────────────────
 
 export function AdminSettingsClient() {
@@ -204,14 +214,16 @@ export function AdminSettingsClient() {
   const [success, setSuccess] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
   const [hasChanges, setHasChanges] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/admin/settings");
-      if (!res.ok) throw new Error((await res.json()).error || "Failed to fetch settings");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Failed to fetch settings (HTTP ${res.status})`);
       setSettings(data.settings || []);
       const vals: Record<string, string> = {};
       for (const s of data.settings || []) {
@@ -300,8 +312,10 @@ export function AdminSettingsClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ settings: updates }),
       });
-      const data = await res.json();
-      if (!res.ok && res.status !== 207) throw new Error(data.error || "Failed to save");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok && res.status !== 207) {
+        throw new Error(data.error || `Failed to save (HTTP ${res.status})`);
+      }
 
       // Check if maintenance mode was toggled
       if ("app.maintenance_mode" in updates) {
@@ -328,6 +342,96 @@ export function AdminSettingsClient() {
   };
 
   const isMaintenanceOn = (editValues["app.maintenance_mode"] ?? "false").replace(/"/g, "") === "true";
+
+  const activateMaintenanceMode = async () => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: { "app.maintenance_mode": true } }),
+      });
+      if (!res.ok) throw new Error("Failed to activate maintenance mode");
+      if (typeof window !== "undefined") {
+        localStorage.setItem("dumpr_maintenance_started_at", String(Date.now()));
+      }
+      setEditValues((prev) => ({ ...prev, "app.maintenance_mode": "true" }));
+      setSuccess("⚠️ Maintenance mode ACTIVATED — all non-admin users will be blocked");
+      fetchSettings();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to activate maintenance mode");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deactivateMaintenanceMode = async () => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: { "app.maintenance_mode": false } }),
+      });
+      if (!res.ok) throw new Error("Failed to deactivate maintenance mode");
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("dumpr_maintenance_started_at");
+      }
+      setEditValues((prev) => ({ ...prev, "app.maintenance_mode": "false" }));
+      setSuccess("✅ Maintenance mode deactivated — platform is live");
+      fetchSettings();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to deactivate maintenance mode");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Countdown timer for entering maintenance mode
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      setCountdown(null);
+      activateMaintenanceMode();
+      return;
+    }
+    const timer = setTimeout(() => {
+      setCountdown((c) => (c !== null ? c - 1 : null));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
+  // Elapsed timer while in maintenance mode
+  useEffect(() => {
+    if (!isMaintenanceOn) {
+      setElapsedSeconds(0);
+      return;
+    }
+    let startTime = Date.now();
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("dumpr_maintenance_started_at");
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed > 0 && parsed <= Date.now()) {
+          startTime = parsed;
+        }
+      } else {
+        localStorage.setItem("dumpr_maintenance_started_at", String(startTime));
+      }
+    }
+
+    setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startTime) / 1000)));
+
+    const interval = setInterval(() => {
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startTime) / 1000)));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isMaintenanceOn]);
 
   if (loading) {
     return (
@@ -367,16 +471,65 @@ export function AdminSettingsClient() {
           </div>
         </div>
 
+        {/* Countdown Banner */}
+        {countdown !== null && (
+          <div className="settings-countdown-banner">
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <Clock size={22} className="timer-pulse" />
+              <div>
+                <strong style={{ fontSize: "0.95rem" }}>Platform Entering Maintenance Mode in {countdown}s</strong>
+                <p style={{ margin: "2px 0 0", fontSize: "0.8rem", opacity: 0.9 }}>
+                  Countdown active. Non-admin visitors will be blocked and redirected once the timer elapses.
+                </p>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div className="digital-countdown-display">
+                00:{countdown < 10 ? `0${countdown}` : countdown}
+              </div>
+              <button
+                type="button"
+                onClick={() => { setCountdown(null); activateMaintenanceMode(); }}
+                className="settings-btn-now"
+              >
+                Enter Now
+              </button>
+              <button
+                type="button"
+                onClick={() => setCountdown(null)}
+                className="settings-btn-abort"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Maintenance Mode Banner */}
         {isMaintenanceOn && (
           <div className="settings-maintenance-banner">
-            <Power size={18} />
-            <div>
-              <strong>Maintenance Mode is ACTIVE</strong>
+            <Power size={20} />
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <strong>Maintenance Mode is ACTIVE</strong>
+                <span className="live-status-pill">● LIVE</span>
+              </div>
               <p style={{ margin: "0.15rem 0 0", fontSize: "0.8rem", opacity: 0.9 }}>
                 All non-admin users are currently blocked from accessing the platform.
-                Toggle off Maintenance Mode and save to restore access.
               </p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div className="maintenance-elapsed-tag">
+                <Clock size={14} />
+                <span>Active: {formatTime(elapsedSeconds)}</span>
+              </div>
+              <button
+                type="button"
+                onClick={deactivateMaintenanceMode}
+                className="settings-btn-deactivate"
+              >
+                Deactivate
+              </button>
             </div>
           </div>
         )}
@@ -414,10 +567,48 @@ export function AdminSettingsClient() {
                       <div className="settings-row-desc">{cfg.description}</div>
                     </div>
                     <div className="settings-row-control">
-                      {cfg.type === "boolean" ? (
+                      {cfg.key === "app.maintenance_mode" ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          {countdown !== null ? (
+                            <div className="timer-pill-running">
+                              <Clock size={14} className="timer-pulse" />
+                              <span>Entering in {countdown}s</span>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setCountdown(null); }}
+                                className="timer-cancel-mini"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              {isMaintenanceOn && (
+                                <span className="timer-pill-active">
+                                  {formatTime(elapsedSeconds)}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                className={`settings-toggle ${isMaintenanceOn ? "settings-toggle-on settings-toggle-danger" : "settings-toggle-off"}`}
+                                onClick={() => {
+                                  if (isMaintenanceOn) {
+                                    deactivateMaintenanceMode();
+                                  } else {
+                                    setCountdown(30);
+                                  }
+                                }}
+                                aria-label="Toggle Maintenance Mode"
+                              >
+                                <span className="settings-toggle-thumb" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ) : cfg.type === "boolean" ? (
                         <button
                           type="button"
-                          className={`settings-toggle ${getDisplayValue(cfg) === "true" ? "settings-toggle-on" : "settings-toggle-off"} ${cfg.key === "app.maintenance_mode" && getDisplayValue(cfg) === "true" ? "settings-toggle-danger" : ""}`}
+                          className={`settings-toggle ${getDisplayValue(cfg) === "true" ? "settings-toggle-on" : "settings-toggle-off"}`}
                           onClick={() => updateValue(cfg.key, getDisplayValue(cfg) === "true" ? "false" : "true")}
                           aria-label={`Toggle ${cfg.label}`}
                         >
@@ -540,6 +731,142 @@ export function AdminSettingsClient() {
         @keyframes pulse-border {
           0%, 100% { border-color: rgba(239,68,68,0.3); }
           50% { border-color: rgba(239,68,68,0.6); }
+        }
+
+        /* Countdown Banner */
+        .settings-countdown-banner {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1rem;
+          padding: 1rem 1.25rem;
+          margin-bottom: 1.25rem;
+          border-radius: 12px;
+          background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(234, 88, 12, 0.1));
+          border: 1px solid rgba(245, 158, 11, 0.4);
+          color: #fbbf24;
+          box-shadow: 0 4px 20px rgba(245, 158, 11, 0.15);
+          animation: pulse-countdown 1.5s ease-in-out infinite alternate;
+        }
+        @keyframes pulse-countdown {
+          0% { border-color: rgba(245, 158, 11, 0.3); }
+          100% { border-color: rgba(245, 158, 11, 0.7); }
+        }
+        .digital-countdown-display {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-size: 1.15rem;
+          font-weight: 800;
+          padding: 4px 10px;
+          border-radius: 6px;
+          background: rgba(0, 0, 0, 0.5);
+          color: #fbbf24;
+          border: 1px solid rgba(245, 158, 11, 0.35);
+          letter-spacing: 0.05em;
+        }
+        .settings-btn-now {
+          padding: 6px 12px;
+          border-radius: 6px;
+          background: #f59e0b;
+          color: #000;
+          font-size: 0.8rem;
+          font-weight: 700;
+          border: none;
+          cursor: pointer;
+          transition: all 150ms;
+        }
+        .settings-btn-now:hover {
+          background: #d97706;
+        }
+        .settings-btn-abort {
+          padding: 6px 12px;
+          border-radius: 6px;
+          background: rgba(255, 255, 255, 0.1);
+          color: var(--text-primary);
+          font-size: 0.8rem;
+          font-weight: 600;
+          border: 1px solid var(--border-subtle);
+          cursor: pointer;
+          transition: all 150ms;
+        }
+        .settings-btn-abort:hover {
+          background: rgba(255, 255, 255, 0.18);
+        }
+        .timer-pulse {
+          animation: timer-beat 1s infinite alternate;
+        }
+        @keyframes timer-beat {
+          0% { opacity: 0.7; transform: scale(0.95); }
+          100% { opacity: 1; transform: scale(1.05); }
+        }
+        .maintenance-elapsed-tag {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-size: 0.85rem;
+          font-weight: 700;
+          color: #f87171;
+          background: rgba(0, 0, 0, 0.4);
+          padding: 4px 10px;
+          border-radius: 6px;
+          border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .settings-btn-deactivate {
+          padding: 6px 14px;
+          border-radius: 6px;
+          background: rgba(239, 68, 68, 0.2);
+          color: #fca5a5;
+          font-size: 0.8rem;
+          font-weight: 700;
+          border: 1px solid rgba(239, 68, 68, 0.4);
+          cursor: pointer;
+          transition: all 150ms;
+        }
+        .settings-btn-deactivate:hover {
+          background: #ef4444;
+          color: white;
+        }
+        .live-status-pill {
+          font-size: 0.7rem;
+          font-weight: 800;
+          color: #ef4444;
+          background: rgba(239, 68, 68, 0.15);
+          padding: 2px 6px;
+          border-radius: 4px;
+        }
+        .timer-pill-running {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 5px 12px;
+          border-radius: 20px;
+          background: rgba(245, 158, 11, 0.15);
+          border: 1px solid rgba(245, 158, 11, 0.4);
+          color: #fbbf24;
+          font-size: 0.8rem;
+          font-weight: 600;
+        }
+        .timer-pill-active {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-size: 0.78rem;
+          font-weight: 700;
+          color: #f87171;
+          background: rgba(239, 68, 68, 0.12);
+          padding: 3px 8px;
+          border-radius: 6px;
+          border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .timer-cancel-mini {
+          background: none;
+          border: none;
+          color: var(--text-muted);
+          cursor: pointer;
+          font-size: 0.75rem;
+          text-decoration: underline;
+          padding: 0;
+        }
+        .timer-cancel-mini:hover {
+          color: #fff;
         }
 
         .settings-alert {

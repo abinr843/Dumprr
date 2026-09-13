@@ -81,3 +81,9 @@ desktop.ini
 .gemini/
 .agent/
 scratch/
+
+# ============================================================
+# Middleware
+# ============================================================
+server/src/middleware/
+middleware/

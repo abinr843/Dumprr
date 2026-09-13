@@ -140,62 +140,54 @@ export function ActivityFeed({
   }, [feedData, feedFilter]);
 
   return (
-    <div className="activity-feed">
+    <div className="feed-card">
+      {/* Card Header */}
       <div className="feed-header">
-        <div className="feed-title-area">
-          <h2 className="feed-title">{title}</h2>
-          <span className="live-indicator">
-            <span className="live-dot" />
-            Live
-          </span>
-        </div>
-
-        <div className="feed-header-controls">
-          <div className="feed-filter-tabs" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={feedFilter === "all"}
-              className={`feed-filter-tab ${feedFilter === "all" ? "active" : ""}`}
-              onClick={() => setFeedFilter("all")}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={feedFilter === "posts"}
-              className={`feed-filter-tab ${feedFilter === "posts" ? "active" : ""}`}
-              onClick={() => setFeedFilter("posts")}
-            >
-              Announcements
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={feedFilter === "files"}
-              className={`feed-filter-tab ${feedFilter === "files" ? "active" : ""}`}
-              onClick={() => setFeedFilter("files")}
-            >
-              Files
-            </button>
+        <div className="feed-title-row">
+          <span className="feed-live-dot" />
+          <div>
+            <div className="feed-title">{title}</div>
+            <div className="feed-subtitle">Real-time timeline of announcements and files in your workspace.</div>
           </div>
-
-          <button
-            type="button"
-            className="refresh-btn"
-            onClick={() => fetchFeed(true)}
-            disabled={loading || refreshing}
-            title="Refresh activity"
-          >
-            <RefreshCw
-              size={14}
-              className={refreshing ? "spin" : ""}
-            />
-            <span className="refresh-label">Refresh</span>
-          </button>
         </div>
+        <a href="/recent" className="feed-view-all">
+          View All <ArrowRight size={13} />
+        </a>
       </div>
+
+      {/* Filter Tabs */}
+      <div className="feed-tabs" role="tablist">
+        <button
+          type="button" role="tab"
+          aria-selected={feedFilter === "all"}
+          className={`feed-tab${feedFilter === "all" ? " feed-tab-active" : ""}`}
+          onClick={() => setFeedFilter("all")}
+        >All</button>
+        <button
+          type="button" role="tab"
+          aria-selected={feedFilter === "posts"}
+          className={`feed-tab${feedFilter === "posts" ? " feed-tab-active" : ""}`}
+          onClick={() => setFeedFilter("posts")}
+        >Announcements</button>
+        <button
+          type="button" role="tab"
+          aria-selected={feedFilter === "files"}
+          className={`feed-tab${feedFilter === "files" ? " feed-tab-active" : ""}`}
+          onClick={() => setFeedFilter("files")}
+        >Files</button>
+        <button
+          type="button"
+          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, padding: "6px 10px", borderRadius: "var(--radius-md)", background: "none", border: "none", color: "var(--text-muted)", fontSize: "var(--text-xs)", cursor: "pointer" }}
+          onClick={() => fetchFeed(true)}
+          disabled={loading || refreshing}
+          title="Refresh"
+        >
+          <RefreshCw size={13} className={refreshing ? "spin" : ""} />
+        </button>
+      </div>
+
+      {/* Feed body */}
+      <div style={{ overflowY: "auto", maxHeight: 480 }}>
 
       {loading ? (
         <div className="feed-loading">
@@ -346,6 +338,7 @@ export function ActivityFeed({
           ))}
         </div>
       )}
+      </div>{/* end feed body */}
 
       {/* Modals */}
       {previewFileId && (
@@ -365,32 +358,11 @@ export function ActivityFeed({
       )}
 
       <style jsx>{`
-        .activity-feed {
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-5);
-        }
-
-        .feed-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding-bottom: var(--space-3);
-          border-bottom: 1px solid var(--border-subtle);
-          flex-wrap: wrap;
-          gap: var(--space-3);
-        }
-
-        .feed-title-area {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
+        /* Feed-card shell styles are in globals.css */
 
         .feed-title {
-          font-size: 1.15rem;
+          font-size: var(--text-sm);
           font-weight: 700;
-          letter-spacing: -0.01em;
           color: var(--text-primary);
           margin: 0;
         }

@@ -15,19 +15,30 @@ import {
   Info,
   ExternalLink,
   Sparkles,
+  LogIn,
 } from "lucide-react";
 
 interface MobileNavProps {
   userRole?: string;
+  userEmail?: string;
 }
 
-const BASE_NAV_ITEMS = [
+/** Guests (no session) */
+const GUEST_MOBILE_ITEMS = [
+  { href: "/", label: "Home", icon: LayoutDashboard },
+  { href: "/files", label: "Files", icon: FolderOpen },
+  { href: "/posts", label: "Posts", icon: FileText },
+];
+
+/** Signed-in regular users */
+const AUTH_MOBILE_ITEMS = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/files", label: "Files", icon: FolderOpen },
   { href: "/posts", label: "Posts", icon: FileText },
   { href: "/recent", label: "Recent", icon: Clock },
 ];
 
+/** Admin users */
 const ADMIN_NAV_ITEMS = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/files", label: "Files", icon: FolderOpen },
@@ -35,10 +46,15 @@ const ADMIN_NAV_ITEMS = [
   { href: "/admin", label: "Admin", icon: Shield, isAdmin: true },
 ];
 
-export function MobileNav({ userRole }: MobileNavProps) {
+export function MobileNav({ userRole, userEmail }: MobileNavProps) {
   const pathname = usePathname();
   const isAdminUser = userRole === "admin" || userRole === "superadmin";
-  const navItems = isAdminUser ? ADMIN_NAV_ITEMS : BASE_NAV_ITEMS;
+  const isAuthenticated = Boolean(userEmail);
+  const navItems = isAdminUser
+    ? ADMIN_NAV_ITEMS
+    : isAuthenticated
+    ? AUTH_MOBILE_ITEMS
+    : GUEST_MOBILE_ITEMS;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -170,7 +186,7 @@ export function MobileNav({ userRole }: MobileNavProps) {
                 <span className="drawer-card-desc">Admin controls</span>
               </div>
             </Link>
-          ) : (
+          ) : isAuthenticated ? (
             <Link
               href="/recent"
               prefetch={false}
@@ -183,6 +199,21 @@ export function MobileNav({ userRole }: MobileNavProps) {
               <div className="drawer-card-text">
                 <span className="drawer-card-title">Timeline</span>
                 <span className="drawer-card-desc">Latest updates</span>
+              </div>
+            </Link>
+          ) : (
+            <Link
+              href="/login"
+              prefetch={false}
+              className={`drawer-card ${pathname === "/login" ? "drawer-card-active" : ""}`}
+              onClick={() => setDrawerOpen(false)}
+            >
+              <div className="drawer-card-icon icon-settings">
+                <LogIn size={18} />
+              </div>
+              <div className="drawer-card-text">
+                <span className="drawer-card-title">Sign In</span>
+                <span className="drawer-card-desc">Access account</span>
               </div>
             </Link>
           )}

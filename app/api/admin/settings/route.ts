@@ -5,6 +5,7 @@ import {
   getRequestContext,
 } from "@/lib/permissions/api-guard";
 import { logAction } from "@/lib/logging/log-action";
+import { invalidateMaintenanceCache } from "@/proxy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -107,6 +108,11 @@ export async function PATCH(req: NextRequest) {
       results.push({ key, success: false, error: upsertError.message });
     } else {
       results.push({ key, success: true });
+
+      // Immediately invalidate maintenance cache when toggled
+      if (key === "app.maintenance_mode") {
+        invalidateMaintenanceCache();
+      }
     }
   }
 
