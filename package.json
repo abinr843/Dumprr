@@ -5,9 +5,9 @@
   "scripts": {
     "dev": "concurrently --names NEXT,API --prefix-colors blue,green \"npm run dev:frontend\" \"npm run dev:backend\"",
     "dev:frontend": "next dev",
-    "dev:backend": "npx -y tsx --watch server/src/server.ts",
-    "build": "npm run build:backend && next build",
+    "build": "next build",
     "build:backend": "npx -y tsc -p server/tsconfig.json",
+    "build:all": "npm run build:backend && next build",
     "start": "concurrently \"next start\" \"node dist/server/server.js\"",
     "start:frontend": "next start",
     "start:backend": "node dist/server/server.js",

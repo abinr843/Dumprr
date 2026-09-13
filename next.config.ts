@@ -10,15 +10,19 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  async rewrites() {
-    return [
-      {
-        // Proxy all /api/* requests to the Express backend
-        source: "/api/:path*",
-        destination: `http://localhost:${process.env.BACKEND_PORT || 5000}/api/:path*`,
-      },
-    ];
-  },
+  ...(process.env.NODE_ENV === "development" && process.env.ENABLE_EXPRESS_BACKEND === "true"
+    ? {
+        async rewrites() {
+          return [
+            {
+              // Proxy /api/* requests to the Express backend when running concurrently in local dev
+              source: "/api/:path*",
+              destination: `http://localhost:${process.env.BACKEND_PORT || 5000}/api/:path*`,
+            },
+          ];
+        },
+      }
+    : {}),
   async headers() {
     return [
       {
