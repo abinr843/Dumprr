@@ -7,7 +7,7 @@
  * DELETE /api/admin/users/:id   — Permanently delete user (admin)
  */
 
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { createAdminClient } from "../../config/supabase.js";
 import { getEnvConfig } from "../../config/env.js";
 import { authenticateUser, requireAdmin } from "../../middleware/auth.js";
@@ -25,11 +25,11 @@ async function getMaxUsers(): Promise<number> {
   const { data } = await admin
     .from("system_settings")
     .select("value")
-    .eq("key", "app.max_users")
+    .eq("key", "max_users")
     .single();
-  if (data?.value) {
-    const parsed = parseInt(String(data.value), 10);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
+
+  if (data && typeof data.value === "number") {
+    return data.value;
   }
   return DEFAULT_MAX_USERS;
 }
@@ -40,7 +40,7 @@ router.get(
   "/",
   authenticateUser,
   requireAdmin("GET /api/admin/users"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (_req: Request, res: Response) => {
     const admin = createAdminClient();
 
     const { data: authData, error: authError } =
@@ -90,7 +90,7 @@ router.post(
   "/",
   authenticateUser,
   requireAdmin("POST /api/admin/users"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const ip = req.ipAddress || "127.0.0.1";
     const ua = req.userAgent || "unknown";
     const { email, password, full_name, role } = req.body as {
@@ -205,7 +205,7 @@ router.patch(
   "/:id",
   authenticateUser,
   requireAdmin("PATCH /api/admin/users/:id"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const ip = req.ipAddress || "127.0.0.1";
     const ua = req.userAgent || "unknown";
@@ -371,7 +371,7 @@ router.delete(
   "/:id",
   authenticateUser,
   requireAdmin("DELETE /api/admin/users/:id"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const ip = req.ipAddress || "127.0.0.1";
     const ua = req.userAgent || "unknown";

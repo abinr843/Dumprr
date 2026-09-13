@@ -5,7 +5,7 @@
  * Handles PKCE code exchange from Supabase Auth.
  */
 
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { createAdminClient } from "../config/supabase.js";
 import { logAction } from "../services/audit.service.js";
 import { AUDIT_ACTIONS } from "../types/index.js";
@@ -15,7 +15,7 @@ const router = Router();
 
 router.get(
   "/callback",
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const code = req.query.code as string | undefined;
     const next = (req.query.next as string) || "/";
     const origin = `${req.protocol}://${req.get("host")}`;

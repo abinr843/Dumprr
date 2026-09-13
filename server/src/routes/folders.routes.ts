@@ -10,7 +10,7 @@
  * DELETE /api/folders/:id/permanent — Permanently delete folder tree (admin)
  */
 
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { createAdminClient } from "../config/supabase.js";
 import { authenticateUser, requireAdmin, isAdmin } from "../middleware/auth.js";
 import { logAction } from "../services/audit.service.js";
@@ -102,7 +102,7 @@ async function collectDescendantIds(
 router.get(
   "/",
   authenticateUser,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const userIsAdmin = req.user ? isAdmin(req.user.role) : false;
     const parentId = req.query.parent_id as string | undefined;
     const status = (req.query.status as string) || "active";
@@ -184,7 +184,7 @@ router.post(
   "/",
   authenticateUser,
   requireAdmin("POST /api/folders"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { name, parent_id, color } = req.body;
     const admin = createAdminClient();
     const ip = req.ipAddress || "127.0.0.1";
@@ -250,7 +250,7 @@ router.post(
 router.get(
   "/:id",
   authenticateUser,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const userIsAdmin = req.user ? isAdmin(req.user.role) : false;
     const admin = createAdminClient();
@@ -298,7 +298,7 @@ router.patch(
   "/:id",
   authenticateUser,
   requireAdmin("PATCH /api/folders/:id"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const admin = createAdminClient();
     const ip = req.ipAddress || "127.0.0.1";
@@ -418,7 +418,7 @@ router.delete(
   "/:id",
   authenticateUser,
   requireAdmin("DELETE /api/folders/:id"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const admin = createAdminClient();
     const ip = req.ipAddress || "127.0.0.1";
@@ -483,7 +483,7 @@ router.post(
   "/:id/restore",
   authenticateUser,
   requireAdmin("POST /api/folders/:id/restore"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const admin = createAdminClient();
     const ip = req.ipAddress || "127.0.0.1";
@@ -545,7 +545,7 @@ router.delete(
   "/:id/permanent",
   authenticateUser,
   requireAdmin("DELETE /api/folders/:id/permanent"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const admin = createAdminClient();
     const ip = req.ipAddress || "127.0.0.1";

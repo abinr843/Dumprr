@@ -3,7 +3,7 @@
  * GET /api/admin/overview
  */
 
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { createAdminClient } from "../../config/supabase.js";
 import { authenticateUser, requireAdmin } from "../../middleware/auth.js";
 import { asyncHandler } from "../../middleware/error-handler.js";
@@ -14,7 +14,7 @@ router.get(
   "/",
   authenticateUser,
   requireAdmin("GET /api/admin/overview"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (_req: Request, res: Response) => {
     const admin = createAdminClient();
     const now = new Date();
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);

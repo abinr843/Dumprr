@@ -5,7 +5,7 @@
  * PATCH /api/admin/settings     — Update one or more settings (admin)
  */
 
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { createAdminClient } from "../../config/supabase.js";
 import { authenticateUser, requireAdmin } from "../../middleware/auth.js";
 import { logAction } from "../../services/audit.service.js";
@@ -21,7 +21,7 @@ router.get(
   "/",
   authenticateUser,
   requireAdmin("GET /api/admin/settings"),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (_req: Request, res: Response) => {
     const admin = createAdminClient();
 
     const { data: settings, error } = await admin
@@ -50,7 +50,7 @@ router.patch(
   "/",
   authenticateUser,
   requireAdmin("PATCH /api/admin/settings"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const updates = req.body as Record<string, unknown>;
     const ip = req.ipAddress || "127.0.0.1";
     const ua = req.userAgent || "unknown";

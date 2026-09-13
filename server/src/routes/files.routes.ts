@@ -12,7 +12,7 @@
  * GET    /api/files/:id/download  — Download with counter increment
  */
 
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
 import { createAdminClient } from "../config/supabase.js";
@@ -37,7 +37,7 @@ const upload = multer({
 router.get(
   "/",
   authenticateUser,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const userIsAdmin = req.user ? isAdmin(req.user.role) : false;
 
     const status = (req.query.status as string) || "active";
@@ -100,7 +100,7 @@ router.post(
   requireAdmin("POST /api/files/upload"),
   rateLimit("upload"),
   upload.single("file"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const file = req.file;
     if (!file) {
       res.status(400).json({ error: "No file provided" });
@@ -267,7 +267,7 @@ router.post(
 router.get(
   "/:id",
   authenticateUser,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const userIsAdmin = req.user ? isAdmin(req.user.role) : false;
     const admin = createAdminClient();
@@ -293,7 +293,7 @@ router.patch(
   "/:id",
   authenticateUser,
   requireAdmin("PATCH /api/files/:id"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const { display_name, folder_id } = req.body;
     const admin = createAdminClient();
@@ -383,7 +383,7 @@ router.delete(
   "/:id",
   authenticateUser,
   requireAdmin("DELETE /api/files/:id"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const admin = createAdminClient();
     const ip = req.ipAddress || "127.0.0.1";
@@ -442,7 +442,7 @@ router.post(
   "/:id/restore",
   authenticateUser,
   requireAdmin("POST /api/files/:id/restore"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const admin = createAdminClient();
     const ip = req.ipAddress || "127.0.0.1";
@@ -501,7 +501,7 @@ router.delete(
   "/:id/permanent",
   authenticateUser,
   requireAdmin("DELETE /api/files/:id/permanent"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const admin = createAdminClient();
     const ip = req.ipAddress || "127.0.0.1";
@@ -558,7 +558,7 @@ router.get(
   "/:id/preview",
   rateLimit("download"),
   authenticateUser,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const userIsAdmin = req.user ? isAdmin(req.user.role) : false;
     const admin = createAdminClient();
@@ -612,7 +612,7 @@ router.get(
   "/:id/download",
   rateLimit("download"),
   authenticateUser,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const userIsAdmin = req.user ? isAdmin(req.user.role) : false;
     const admin = createAdminClient();

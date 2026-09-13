@@ -3,7 +3,7 @@
  * GET /api/search
  */
 
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { createAdminClient } from "../config/supabase.js";
 import { rateLimit } from "../middleware/rate-limiter.js";
 import { authenticateUser, isAdmin } from "../middleware/auth.js";
@@ -17,7 +17,7 @@ router.get(
   "/",
   rateLimit("search"),
   authenticateUser,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const q = ((req.query.q as string) || "").trim();
     const type = (req.query.type as string) || "all";
     const limit = Math.min(parseInt((req.query.limit as string) || "20", 10), 100);

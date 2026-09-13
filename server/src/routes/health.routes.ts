@@ -3,12 +3,12 @@
  * GET /api/health
  */
 
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { createAdminClient } from "../config/supabase.js";
 
 const router = Router();
 
-router.get("/", async (_req, res) => {
+router.get("/", async (_req: Request, res: Response) => {
   try {
     const admin = createAdminClient();
     const { error } = await admin

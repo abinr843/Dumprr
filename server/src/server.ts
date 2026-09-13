@@ -83,7 +83,7 @@ app.use("/api/admin/settings", adminSettingsRoutes);
 app.use("/api/admin/users", adminUsersRoutes);
 
 // Admin cleanup (reuse trash cleanup logic)
-app.post("/api/admin/cleanup", async (req, res) => {
+app.post("/api/admin/cleanup", async (req: express.Request, res: express.Response) => {
   // Redirect to trash cleanup handler
   req.url = "/cleanup";
   trashRoutes(req, res, () => {
@@ -92,7 +92,7 @@ app.post("/api/admin/cleanup", async (req, res) => {
 });
 
 // Maintenance status endpoint
-app.get("/api/maintenance/status", async (_req, res) => {
+app.get("/api/maintenance/status", async (_req: express.Request, res: express.Response) => {
   try {
     const admin = createAdminClient();
     const { data } = await admin
@@ -110,7 +110,7 @@ app.get("/api/maintenance/status", async (_req, res) => {
 });
 
 // Batch storage operations (batch move, batch delete)
-app.post("/api/storage/batch", authenticateUser, requireAdmin, async (req: express.Request, res: express.Response) => {
+app.post("/api/storage/batch", authenticateUser, requireAdmin("POST /api/storage/batch"), async (req: express.Request, res: express.Response) => {
   const { action, fileIds, folderIds, destinationFolderId } = req.body as {
     action?: string;
     fileIds?: string[];

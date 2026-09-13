@@ -6,7 +6,7 @@
  * POST   /api/trash/cleanup — Trigger retention cleanup cycle (admin/cron)
  */
 
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { createAdminClient } from "../config/supabase.js";
 import { authenticateUser, requireAdmin } from "../middleware/auth.js";
 import { logAction } from "../services/audit.service.js";
@@ -22,7 +22,7 @@ router.get(
   "/",
   authenticateUser,
   requireAdmin("GET /api/trash"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const admin = createAdminClient();
 
     const [filesResult, foldersResult, postsResult] = await Promise.all([
@@ -76,7 +76,7 @@ router.delete(
   "/",
   authenticateUser,
   requireAdmin("DELETE /api/trash"),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const ip = req.ipAddress || "127.0.0.1";
     const ua = req.userAgent || "unknown";
 
@@ -106,7 +106,7 @@ router.delete(
 
 router.post(
   "/cleanup",
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const ip = req.ipAddress || "127.0.0.1";
     const ua = req.userAgent || "unknown";
 

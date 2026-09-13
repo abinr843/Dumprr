@@ -3,7 +3,7 @@
  * GET /api/feed/recent
  */
 
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { getRecentFeed } from "../services/feed.service.js";
 import { logAction } from "../services/audit.service.js";
 import { AUDIT_ACTIONS } from "../types/index.js";
@@ -13,7 +13,7 @@ const router = Router();
 
 router.get(
   "/recent",
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const limit = Math.min(
       parseInt((req.query.limit as string) || "10", 10),
       100
