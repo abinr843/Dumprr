@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, notFound, fail } from "@/lib/api/response";
+import { humanizeTechnicalError } from "@/lib/api/human-errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   authenticateAdminApi,
@@ -45,7 +47,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       user_agent: userAgent,
       metadata: { reason: "File not found" },
     });
-    return NextResponse.json({ error: "File not found" }, { status: 404 });
+    return notFound("This file no longer exists.");
   }
 
   // Remove physical object from storage
@@ -66,11 +68,10 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
         user_agent: userAgent,
         metadata: { error: removeErr.message, stage: "storage_removal" },
       });
-      return NextResponse.json(
-        {
-          error: `Storage removal failed: ${removeErr.message}`,
-        },
-        { status: 500 }
+      return fail(
+        "INTERNAL_ERROR",
+        humanizeTechnicalError(removeErr, "Couldn't delete the stored file. Please try again."),
+        500
       );
     }
   }
@@ -93,9 +94,10 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       user_agent: userAgent,
       metadata: { error: deleteErr.message, stage: "database_deletion" },
     });
-    return NextResponse.json(
-      { error: `Database deletion failed: ${deleteErr.message}` },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(deleteErr, "Couldn't delete this file's record. Please try again."),
+      500
     );
   }
 
@@ -113,7 +115,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     },
   });
 
-  return NextResponse.json({
+  return ok({
     message: "File permanently deleted",
     deletedId: id,
   });

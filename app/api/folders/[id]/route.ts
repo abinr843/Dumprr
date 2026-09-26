@@ -1,4 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, badRequest, notFound, fail, validationFailed, conflict } from "@/lib/api/response";
+import {
+  humanizeTechnicalError,
+  humanizeZodDetails,
+} from "@/lib/api/human-errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth/session";
 import { isAdmin } from "@/lib/auth/roles";
@@ -97,7 +102,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
   const { data: folder, error } = await query.single();
 
   if (error || !folder) {
-    return NextResponse.json({ error: "Folder not found" }, { status: 404 });
+    return notFound("This folder is no longer available. It may have been moved or deleted.");
   }
 
   // Get breadcrumbs and child counts
@@ -116,7 +121,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
         .eq("status", "active"),
     ]);
 
-  return NextResponse.json({
+  return ok({
     folder: {
       ...folder,
       breadcrumbs,
@@ -139,9 +144,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const parsed = folderUpdateSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Validation failed", details: parsed.error.flatten() },
-      { status: 400 }
+    return validationFailed(
+      humanizeZodDetails(parsed.error.flatten()),
+      parsed.error.flatten()
     );
   }
 
@@ -155,7 +160,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     .single();
 
   if (fetchErr || !existing) {
-    return NextResponse.json({ error: "Folder not found" }, { status: 404 });
+    return notFound("This folder no longer exists.");
   }
 
   const updates: FolderUpdate = {
@@ -187,18 +192,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     // Cycle detection: can't move folder into itself or its descendants
     if (parent_id !== null) {
       if (parent_id === id) {
-        return NextResponse.json(
-          { error: "Cannot move a folder into itself" },
-          { status: 400 }
-        );
+        return badRequest("A folder can't be moved into itself. Please choose another destination.");
       }
 
       const isCycle = await isDescendantOf(adminClient, parent_id, id);
       if (isCycle) {
-        return NextResponse.json(
-          { error: "Cannot move a folder into one of its own descendants" },
-          { status: 400 }
-        );
+        return badRequest("A folder can't be moved into one of its own subfolders.");
       }
 
       // Verify target parent exists and is active
@@ -210,10 +209,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         .single();
 
       if (!targetParent) {
-        return NextResponse.json(
-          { error: "Target parent folder not found" },
-          { status: 400 }
-        );
+        return badRequest("The destination folder no longer exists. Please choose another.");
       }
     }
 
@@ -246,7 +242,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
 
   if (Object.keys(updates).length <= 1) {
-    return NextResponse.json({ folder: existing, message: "No changes" });
+    return ok({ folder: existing, message: "No changes" });
   }
 
   const { data: updated, error: updateErr } = await adminClient
@@ -257,9 +253,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     .single();
 
   if (updateErr) {
-    return NextResponse.json(
-      { error: `Update failed: ${updateErr.message}` },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(updateErr, "Couldn't update this folder. Please try again."),
+      500
     );
   }
 
@@ -277,7 +274,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     });
   }
 
-  return NextResponse.json({ folder: updated });
+  return ok({ folder: updated });
 }
 
 /**
@@ -299,14 +296,11 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     .single();
 
   if (fetchErr || !existing) {
-    return NextResponse.json({ error: "Folder not found" }, { status: 404 });
+    return notFound("This folder no longer exists.");
   }
 
   if (existing.status === "trash") {
-    return NextResponse.json(
-      { error: "Folder is already in trash" },
-      { status: 409 }
-    );
+    return conflict("This folder is already in trash.");
   }
 
   const now = new Date().toISOString();
@@ -360,7 +354,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     },
   });
 
-  return NextResponse.json({
+  return ok({
     message: "Folder and contents moved to trash",
     foldersAffected: allFolderIds.length,
   });

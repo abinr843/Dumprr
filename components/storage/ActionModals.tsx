@@ -12,6 +12,8 @@ import {
   ChevronRight,
   Loader2,
 } from "lucide-react";
+import { apiFetch } from "@/lib/client/api";
+import { toast } from "@/components/ui/Toast";
 
 // ─── Modal Shell ─────────────────────────────────────────────────────
 
@@ -270,7 +272,7 @@ export function CreateFolderModal({
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      setError("Folder name is required");
+      setError("Please give the folder a name.");
       return;
     }
 
@@ -278,7 +280,7 @@ export function CreateFolderModal({
     setError("");
 
     try {
-      const res = await fetch("/api/folders", {
+      await apiFetch("/api/folders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -288,18 +290,15 @@ export function CreateFolderModal({
         }),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "Failed to create folder");
-        return;
-      }
-
+      toast.success(`Folder "${name.trim()}" created`);
       setName("");
       setColor("#6366f1");
       onCreated();
       onClose();
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Couldn't create that folder";
+      setError(msg);
+      toast.error("Couldn't create folder", { description: msg });
     } finally {
       setLoading(false);
     }
@@ -430,22 +429,19 @@ export function RenameModal({
           ? { display_name: name.trim() }
           : { name: name.trim() };
 
-      const res = await fetch(endpoint, {
+      await apiFetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "Rename failed");
-        return;
-      }
-
+      toast.success("Renamed successfully");
       onRenamed();
       onClose();
-    } catch {
-      setError("Network error.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Couldn't rename that";
+      setError(msg);
+      toast.error("Couldn't rename", { description: msg });
     } finally {
       setLoading(false);
     }
@@ -552,13 +548,10 @@ export function MoveModal({
   const loadFolderTree = async () => {
     setLoadingTree(true);
     try {
-      const res = await fetch("/api/folders?parent_id=null&status=active");
-      if (res.ok) {
-        const data = await res.json();
-        setFolders(data.folders || []);
-      }
+      const data = await apiFetch<{ folders: unknown[] }>("/api/folders?parent_id=null&status=active");
+      setFolders(data.folders || []);
     } catch {
-      // ignore
+      // keep previous tree on failure
     } finally {
       setLoadingTree(false);
     }
@@ -592,22 +585,19 @@ export function MoveModal({
           ? { folder_id: selectedId }
           : { parent_id: selectedId };
 
-      const res = await fetch(endpoint, {
+      await apiFetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "Move failed");
-        return;
-      }
-
+      toast.success("Moved successfully");
       onMoved?.();
       onClose();
-    } catch {
-      setError("Network error.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Couldn't move that";
+      setError(msg);
+      toast.error("Couldn't move", { description: msg });
     } finally {
       setLoading(false);
     }

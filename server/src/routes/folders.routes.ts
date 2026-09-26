@@ -17,6 +17,7 @@ import { logAction } from "../services/audit.service.js";
 import { AUDIT_ACTIONS } from "../types/index.js";
 import type { BreadcrumbItem } from "../types/index.js";
 import { asyncHandler } from "../middleware/error-handler.js";
+import { humanizeTechnicalError } from "../utils/api-response.js";
 
 const router = Router();
 
@@ -126,7 +127,7 @@ router.get(
     const { data: folders, error } = await query;
 
     if (error) {
-      res.status(500).json({ error: `Failed to fetch folders: ${error.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(error, "Couldn't load folders. Please try again.") });
       return;
     }
 
@@ -225,7 +226,7 @@ router.post(
       .single();
 
     if (insertErr) {
-      res.status(500).json({ error: `Folder creation failed: ${insertErr.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(insertErr, "Couldn't create that folder. Please try again.") });
       return;
     }
 
@@ -390,7 +391,7 @@ router.patch(
       .single();
 
     if (updateErr) {
-      res.status(500).json({ error: `Update failed: ${updateErr.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(updateErr, "Couldn't update this folder. Please try again.") });
       return;
     }
 

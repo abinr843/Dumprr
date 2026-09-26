@@ -48,7 +48,9 @@ export function globalErrorHandler(
   });
 
   res.status(statusCode).json({
-    error: isProduction ? "Internal server error" : err.message,
+    success: false,
+    error: isProduction ? "Something went wrong on our end. Please try again in a moment." : err.message,
+    code: "INTERNAL_ERROR",
     ...(isProduction ? {} : { stack: err.stack }),
   });
 }

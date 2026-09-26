@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, badRequest, notFound, fail } from "@/lib/api/response";
+import { humanizeTechnicalError } from "@/lib/api/human-errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAction } from "@/lib/logging/log-action";
 import { AUDIT_ACTIONS } from "@/types/audit";
@@ -14,6 +16,7 @@ export const dynamic = "force-dynamic";
 import {
   PREVIEWABLE_EXTENSIONS,
   INLINE_MIME_TYPES,
+  getPreviewKind,
 } from "@/lib/storage/preview";
 
 interface RouteParams {
@@ -27,7 +30,7 @@ interface RouteParams {
 export async function GET(req: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   if (!id) {
-    return NextResponse.json({ error: "File ID is required" }, { status: 400 });
+    return badRequest("We couldn't tell which file to preview. Please try again.");
   }
 
   const ipAddress =
@@ -57,12 +60,10 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       maintenanceSetting?.value === "true" || maintenanceSetting?.value === true;
 
     if (isMaintenanceOn) {
-      return NextResponse.json(
-        {
-          error: "File previews are temporarily disabled during maintenance mode.",
-          maintenance: true,
-        },
-        { status: 503 }
+      return fail(
+        "MAINTENANCE",
+        "Previews are paused while the site is under maintenance. Please try again later.",
+        503
       );
     }
   } catch {
@@ -89,17 +90,17 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       user_agent: userAgent,
       metadata: { reason: "File not found, inactive, or deleted (preview)" },
     });
-    return NextResponse.json(
-      { error: "File not found or no longer available" },
-      { status: 404 }
-    );
+    return notFound("This file is no longer available. It may have been moved or deleted.");
   }
 
   const ext = (file.extension || "").toLowerCase();
   const isPreviewable = PREVIEWABLE_EXTENSIONS.has(ext);
+  const previewKind = getPreviewKind(ext);
 
   if (isPreviewable) {
-    // Generate signed URL with inline disposition for browser preview
+    // Generate signed URL with inline disposition for browser preview.
+    // Supabase storage signed URLs honour HTTP Range requests, so audio/
+    // video scrubbing works natively in the browser player.
     const contentType = INLINE_MIME_TYPES[ext] || file.mime_type;
 
     const { data: signedUrlData, error: signError } = await adminClient.storage
@@ -120,16 +121,19 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         user_agent: userAgent,
         metadata: { reason: "Failed to generate preview URL" },
       });
-      return NextResponse.json(
-        { error: "Failed to generate preview URL" },
-        { status: 500 }
+      return fail(
+        "INTERNAL_ERROR",
+        "We couldn't prepare this preview. Please try downloading the file instead.",
+        500
       );
     }
 
-    return NextResponse.json({
+    return ok({
       previewable: true,
       previewUrl: signedUrlData.signedUrl,
+      downloadUrl: `/api/files/${file.id}/download`,
       mimeType: contentType,
+      previewKind,
       fileName: file.display_name || file.original_name || file.name,
       originalName: file.original_name,
       sizeBytes: file.size_bytes,
@@ -138,14 +142,15 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   }
 
   // Non-previewable: return download fallback info
-  return NextResponse.json({
+  return ok({
     previewable: false,
+    previewKind,
     downloadUrl: `/api/files/${file.id}/download`,
     fileName: file.display_name || file.original_name || file.name,
     originalName: file.original_name,
     sizeBytes: file.size_bytes,
     extension: ext,
     mimeType: file.mime_type,
-    reason: "This file format requires download to view",
+    reason: "This file type can't be previewed here — download it to view.",
   });
 }

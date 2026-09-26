@@ -32,6 +32,10 @@ import { AdminUploadZone } from "./AdminUploadZone";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { FolderCard } from "./FolderCard";
 import { TrashView } from "./TrashView";
+import { BookmarksPanel } from "@/components/bookmarks/BookmarksPanel";
+import { BookmarkButton } from "@/components/bookmarks/BookmarkButton";
+import { apiFetch, ApiError } from "@/lib/client/api";
+import { toast } from "@/components/ui/Toast";
 import { FilePreviewModal } from "./FilePreviewModal";
 import {
   CreateFolderModal,
@@ -89,7 +93,7 @@ function getFileIcon(filename: string) {
   return <FileText size={22} className="text-blue-400" />;
 }
 
-type TabKey = "files" | "trash";
+type TabKey = "files" | "trash" | "bookmarks";
 
 export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesManagerProps) {
   // ─── State ────────────────────────────────────────────────────────
@@ -191,6 +195,19 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
+
+  // Deep-link support: /files?preview=<id> or ?folder=<id>
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const pid = sp.get("preview");
+      if (pid) setPreviewFileId(pid);
+      const fid = sp.get("folder");
+      if (fid) setCurrentFolderId(fid);
+    } catch {
+      /* noop */
+    }
+  }, []);
 
   // ─── Data Loading ─────────────────────────────────────────────────
 
@@ -323,10 +340,17 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
         ? `/api/files/${deleteTarget.id}`
         : `/api/folders/${deleteTarget.id}`;
 
-    const res = await fetch(endpoint, { method: "DELETE" });
-    if (res.ok) {
+    try {
+      await toast.promise(apiFetch(endpoint, { method: "DELETE" }), {
+        loading: "Moving to trash…",
+        success: "Moved to trash",
+        error: (e) => (e instanceof Error ? e.message : "Couldn't move to trash"),
+      });
+      setDeleteTarget(null);
       loadData();
       loadTrashCount();
+    } catch {
+      // toast.promise already surfaced the error
     }
   };
 
@@ -335,7 +359,7 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
   const handleBulkMove = async (destinationFolderId: string | null) => {
     setBulkLoading(true);
     try {
-      const res = await fetch("/api/storage/batch", {
+      const data = await apiFetch<{ message?: string }>(`/api/storage/batch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -345,13 +369,25 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
           destinationFolderId,
         }),
       });
-      if (res.ok || res.status === 207) {
+      toast.success(data.message || "Items moved");
+      clearSelection();
+      loadData();
+      loadTrashCount();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 207) {
+        // Partial success: some items moved, some didn't
+        const d = err.details as { message?: string } | undefined;
+        toast.info("Partially completed", {
+          description: d?.message || err.message,
+        });
         clearSelection();
         loadData();
         loadTrashCount();
+      } else {
+        toast.error("Couldn't move items", {
+          description: err instanceof Error ? err.message : undefined,
+        });
       }
-    } catch {
-      // ignore
     } finally {
       setBulkLoading(false);
       setBulkMoveOpen(false);
@@ -361,7 +397,7 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
   const handleBulkDelete = async () => {
     setBulkLoading(true);
     try {
-      const res = await fetch("/api/storage/batch", {
+      const data = await apiFetch<{ message?: string }>(`/api/storage/batch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -370,13 +406,24 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
           folderIds: [...selectedFolders],
         }),
       });
-      if (res.ok || res.status === 207) {
+      toast.success(data.message || "Items moved to trash");
+      clearSelection();
+      loadData();
+      loadTrashCount();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 207) {
+        const d = err.details as { message?: string } | undefined;
+        toast.info("Partially completed", {
+          description: d?.message || err.message,
+        });
         clearSelection();
         loadData();
         loadTrashCount();
+      } else {
+        toast.error("Couldn't move items to trash", {
+          description: err instanceof Error ? err.message : undefined,
+        });
       }
-    } catch {
-      // ignore
     } finally {
       setBulkLoading(false);
       setBulkDeleteOpen(false);
@@ -456,65 +503,69 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
         gap: "var(--space-6)",
       }}
     >
-      {/* Admin Tab Switcher */}
-      {isAdmin && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "4px",
-            padding: "4px",
-            borderRadius: "var(--radius-lg)",
-            backgroundColor: "var(--bg-card)",
-            border: "1px solid var(--border-subtle)",
-            width: "fit-content",
-          }}
-        >
-          {(
-            [
-              { key: "files" as TabKey, label: "Files & Folders" },
-              {
-                key: "trash" as TabKey,
-                label: `Trash${trashCount > 0 ? ` (${trashCount})` : ""}`,
-              },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "var(--radius-md)",
-                fontSize: "var(--text-sm)",
-                fontWeight: activeTab === tab.key ? 600 : 400,
-                color:
-                  activeTab === tab.key
-                    ? "var(--text-primary)"
-                    : "var(--text-muted)",
-                backgroundColor:
-                  activeTab === tab.key
-                    ? "var(--bg-elevated)"
-                    : "transparent",
-                boxShadow:
-                  activeTab === tab.key
-                    ? "0 1px 3px rgba(0,0,0,0.1)"
-                    : "none",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-              }}
-            >
-              {tab.key === "trash" && (
-                <Trash2
-                  size={14}
-                  style={{ display: "inline", marginRight: "6px", verticalAlign: "-2px" }}
-                />
-              )}
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Tab Switcher: Files / Trash / Bookmarks (Feature 8) */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "4px",
+          padding: "4px",
+          borderRadius: "var(--radius-lg)",
+          backgroundColor: "var(--bg-card)",
+          border: "1px solid var(--border-subtle)",
+          width: "fit-content",
+        }}
+      >
+        {(
+          [
+            { key: "files" as TabKey, label: "Files & Folders" },
+            { key: "bookmarks" as TabKey, label: "Bookmarks" },
+            ...(isAdmin
+              ? [
+                  {
+                    key: "trash" as TabKey,
+                    label: `Trash${trashCount > 0 ? ` (${trashCount})` : ""}`,
+                  },
+                ]
+              : []),
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "var(--radius-md)",
+              fontSize: "var(--text-sm)",
+              fontWeight: activeTab === tab.key ? 600 : 400,
+              color:
+                activeTab === tab.key
+                  ? "var(--text-primary)"
+                  : "var(--text-muted)",
+              backgroundColor:
+                activeTab === tab.key
+                  ? "var(--bg-elevated)"
+                  : "transparent",
+              boxShadow:
+                activeTab === tab.key
+                  ? "0 1px 3px rgba(0,0,0,0.1)"
+                  : "none",
+              border: "none",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            {tab.key === "trash" && (
+              <Trash2
+                size={14}
+                style={{ display: "inline", marginRight: "6px", verticalAlign: "-2px" }}
+              />
+            )}
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       {/* Trash View Tab */}
       {activeTab === "trash" && isAdmin && (
@@ -525,6 +576,9 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
           }}
         />
       )}
+
+      {/* Bookmarks Tab */}
+      {activeTab === "bookmarks" && <BookmarksPanel onPreview={setPreviewFileId} />}
 
       {/* Files & Folders Tab */}
       {activeTab === "files" && (
@@ -1165,6 +1219,7 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
                             className="file-col file-col-actions"
                             onClick={(e) => e.stopPropagation()}
                           >
+                            <BookmarkButton itemType="file" itemId={file.id} />
                             <button
                               type="button"
                               className="list-action-btn"
@@ -1526,6 +1581,7 @@ export function FilesManager({ initialFiles, initialFolders, isAdmin }: FilesMan
                                 gap: "6px",
                               }}
                             >
+                              <BookmarkButton itemType="file" itemId={file.id} />
                               <button
                                 type="button"
                                 onClick={() => setPreviewFileId(file.id)}

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok } from "@/lib/api/response";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { authenticateAdminApi } from "@/lib/permissions/api-guard";
 
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
   const failedActionsToday = failedResult.status === "fulfilled" ? (failedResult.value.count ?? 0) : 0;
   const recentEvents = recentEventsResult.status === "fulfilled" ? recentEventsResult.value.data ?? [] : [];
 
-  return NextResponse.json({
+  return ok({
     users: { count: userCount, max: MAX_USERS, percentFull: Math.min(100, Math.round((userCount / MAX_USERS) * 100)) },
     files: { count: filesCount },
     posts: { count: postsCount },

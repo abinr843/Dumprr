@@ -13,6 +13,7 @@ import { injectContext, authenticateUser, requireAdmin } from "./middleware/auth
 import { createAdminClient } from "./config/supabase.js";
 import { maintenanceGuard } from "./middleware/maintenance.js";
 import { globalErrorHandler } from "./middleware/error-handler.js";
+import { standardizeEnvelope, humanizeTechnicalError } from "./utils/api-response.js";
 
 // Route modules
 import healthRoutes from "./routes/health.routes.js";
@@ -58,6 +59,10 @@ app.use(cookieParser());
 
 // Inject IP and User-Agent onto every request
 app.use(injectContext);
+
+// Standardize every API response into the { success, ... } envelope
+// (legacy { error } shapes are normalized automatically)
+app.use("/api", standardizeEnvelope);
 
 // Maintenance mode guard (blocks non-exempt routes during maintenance)
 app.use("/api", maintenanceGuard);
@@ -119,7 +124,7 @@ app.post("/api/storage/batch", authenticateUser, requireAdmin("POST /api/storage
   };
 
   if (!action || !["move", "delete"].includes(action)) {
-    res.status(400).json({ error: "Invalid action. Must be 'move' or 'delete'." });
+    res.status(400).json({ error: "Please choose whether to move or delete these items." });
     return;
   }
 
@@ -127,7 +132,7 @@ app.post("/api/storage/batch", authenticateUser, requireAdmin("POST /api/storage
   const safeFolderIds = Array.isArray(folderIds) ? folderIds.filter(Boolean) : [];
 
   if (safeFileIds.length === 0 && safeFolderIds.length === 0) {
-    res.status(400).json({ error: "No items selected." });
+    res.status(400).json({ error: "Please select at least one item to perform this action." });
     return;
   }
 
@@ -146,7 +151,7 @@ app.post("/api/storage/batch", authenticateUser, requireAdmin("POST /api/storage
           .in("id", safeFileIds)
           .is("deleted_at", null);
 
-        if (fileErr) results.errors.push(fileErr.message);
+        if (fileErr) results.errors.push(humanizeTechnicalError(fileErr, "Couldn't move some files. Please try again."));
         else results.filesUpdated = count ?? safeFileIds.length;
       }
 
@@ -162,7 +167,7 @@ app.post("/api/storage/batch", authenticateUser, requireAdmin("POST /api/storage
             .in("id", validFolderIds)
             .is("deleted_at", null);
 
-          if (folderErr) results.errors.push(folderErr.message);
+          if (folderErr) results.errors.push(humanizeTechnicalError(folderErr, "Couldn't move some folders. Please try again."));
           else results.foldersUpdated = count ?? validFolderIds.length;
         }
       }
@@ -175,7 +180,7 @@ app.post("/api/storage/batch", authenticateUser, requireAdmin("POST /api/storage
           .in("id", safeFileIds)
           .is("deleted_at", null);
 
-        if (fileErr) results.errors.push(fileErr.message);
+        if (fileErr) results.errors.push(humanizeTechnicalError(fileErr, "Couldn't delete some files. Please try again."));
         else results.filesUpdated = count ?? safeFileIds.length;
       }
 
@@ -186,14 +191,14 @@ app.post("/api/storage/batch", authenticateUser, requireAdmin("POST /api/storage
           .in("id", safeFolderIds)
           .is("deleted_at", null);
 
-        if (folderErr) results.errors.push(folderErr.message);
+        if (folderErr) results.errors.push(humanizeTechnicalError(folderErr, "Couldn't delete some folders. Please try again."));
         else results.foldersUpdated = count ?? safeFolderIds.length;
       }
     }
 
     res.json({ success: results.errors.length === 0, ...results });
   } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
+    res.status(500).json({ error: humanizeTechnicalError(err, "Something went wrong. Please try again.") });
   }
 });
 

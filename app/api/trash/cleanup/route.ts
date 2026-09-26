@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, unauthorized, fail } from "@/lib/api/response";
+import { humanizeTechnicalError } from "@/lib/api/human-errors";
 import { cleanupExpiredTrash } from "@/lib/storage/trash";
 import { logAction } from "@/lib/logging/log-action";
 import { AUDIT_ACTIONS } from "@/types/audit";
@@ -38,10 +40,7 @@ export async function POST(req: NextRequest) {
         user_agent: userAgent,
         metadata: { reason: "Invalid cron secret" },
       });
-      return NextResponse.json(
-        { error: "Unauthorized: Invalid cron secret" },
-        { status: 401 }
-      );
+      return unauthorized("That scheduled task key isn't valid.");
     }
   }
 
@@ -58,7 +57,7 @@ export async function POST(req: NextRequest) {
       metadata: result,
     });
 
-    return NextResponse.json({
+    return ok({
       message: "Trash cleanup completed",
       ...result,
     });
@@ -73,9 +72,10 @@ export async function POST(req: NextRequest) {
       user_agent: userAgent,
       metadata: { error: err instanceof Error ? err.message : "Unknown error" },
     });
-    return NextResponse.json(
-      { error: "Trash cleanup failed" },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(err, "Trash cleanup couldn't finish. Please try again."),
+      500
     );
   }
 }

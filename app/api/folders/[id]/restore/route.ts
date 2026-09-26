@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, notFound, conflict } from "@/lib/api/response";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   authenticateAdminApi,
@@ -34,14 +35,11 @@ export async function POST(req: NextRequest, context: RouteContext) {
     .single();
 
   if (fetchErr || !existing) {
-    return NextResponse.json({ error: "Folder not found" }, { status: 404 });
+    return notFound("This folder no longer exists.");
   }
 
   if (existing.status !== "trash") {
-    return NextResponse.json(
-      { error: "Folder is not in trash" },
-      { status: 409 }
-    );
+    return conflict("This folder isn't in trash, so there's nothing to restore.");
   }
 
   const now = new Date().toISOString();
@@ -94,7 +92,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     metadata: { restoredFolders: allFolderIds.length },
   });
 
-  return NextResponse.json({
+  return ok({
     message: "Folder and contents restored",
     foldersRestored: allFolderIds.length,
   });

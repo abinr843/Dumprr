@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, notFound } from "@/lib/api/response";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   authenticateAdminApi,
@@ -37,10 +38,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     .single();
 
   if (error || !post) {
-    return NextResponse.json(
-      { error: "Post not found in trash" },
-      { status: 404 }
-    );
+    return notFound("That post isn't in trash, so there's nothing to restore.");
   }
 
   await logAction({
@@ -55,5 +53,5 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     metadata: { slug: post.slug },
   });
 
-  return NextResponse.json({ message: "Post restored", post });
+  return ok({ message: "Post restored", post });
 }

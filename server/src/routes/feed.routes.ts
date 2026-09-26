@@ -8,6 +8,7 @@ import { getRecentFeed } from "../services/feed.service.js";
 import { logAction } from "../services/audit.service.js";
 import { AUDIT_ACTIONS } from "../types/index.js";
 import { asyncHandler } from "../middleware/error-handler.js";
+import { humanizeTechnicalError } from "../utils/api-response.js";
 
 const router = Router();
 
@@ -34,7 +35,7 @@ router.get(
           error: err instanceof Error ? err.message : "Unknown error",
         },
       });
-      res.status(500).json({ error: "Failed to load feed" });
+      res.status(500).json({ error: humanizeTechnicalError(err, "The activity feed isn't loading right now. Please try again.") });
     }
   })
 );

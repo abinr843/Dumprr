@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { LayoutShell } from "@/components/layout/LayoutShell";
 import { ActivityFeed } from "@/components/feed/ActivityFeed";
+import { RecentTrayClient } from "@/components/recent/RecentTrayClient";
 import { getSession } from "@/lib/auth/session";
 import { getRecentFeed } from "@/lib/feed/recent";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -349,6 +350,8 @@ export default async function HomePage() {
 
           {/* Right column */}
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+
+            {session?.user ? <RecentTrayClient /> : null}
 
             {/* Quick Actions */}
             <div className="panel-card">

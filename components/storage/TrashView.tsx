@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import type { TrashItem } from "@/types/storage";
 import { ConfirmDeleteModal } from "./ActionModals";
+import { apiFetch } from "@/lib/client/api";
+import { toast } from "@/components/ui/Toast";
 
 interface TrashViewProps {
   onRefresh: () => void;
@@ -49,13 +51,12 @@ export function TrashView({ onRefresh }: TrashViewProps) {
   const loadTrash = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/trash");
-      if (res.ok) {
-        const data = await res.json();
-        setItems(data.items || []);
-      }
-    } catch {
-      // ignore
+      const data = await apiFetch<{ items: TrashItem[] }>("/api/trash");
+      setItems(data.items || []);
+    } catch (err) {
+      toast.error("Couldn't load trash", {
+        description: err instanceof Error ? err.message : undefined,
+      });
     } finally {
       setLoading(false);
     }
@@ -73,13 +74,14 @@ export function TrashView({ onRefresh }: TrashViewProps) {
           ? `/api/files/${item.id}/restore`
           : `/api/folders/${item.id}/restore`;
 
-      const res = await fetch(endpoint, { method: "POST" });
-      if (res.ok) {
-        setItems((prev) => prev.filter((i) => i.id !== item.id));
-        onRefresh();
-      }
-    } catch {
-      // ignore
+      await apiFetch(endpoint, { method: "POST" });
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      onRefresh();
+      toast.success("Item restored");
+    } catch (err) {
+      toast.error("Couldn't restore item", {
+        description: err instanceof Error ? err.message : undefined,
+      });
     } finally {
       setActionLoading(null);
     }
@@ -93,22 +95,30 @@ export function TrashView({ onRefresh }: TrashViewProps) {
           ? `/api/files/${item.id}/permanent`
           : `/api/folders/${item.id}/permanent`;
 
-      const res = await fetch(endpoint, { method: "DELETE" });
-      if (res.ok) {
-        setItems((prev) => prev.filter((i) => i.id !== item.id));
-      }
-    } catch {
-      // ignore
+      await apiFetch(endpoint, { method: "DELETE" });
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      toast.success("Item permanently deleted");
+    } catch (err) {
+      toast.error("Couldn't delete item", {
+        description: err instanceof Error ? err.message : undefined,
+      });
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleEmptyTrash = async () => {
-    const res = await fetch("/api/trash", { method: "DELETE" });
-    if (res.ok) {
+    try {
+      const data = await toast.promise(apiFetch<{ filesDeleted?: number; foldersDeleted?: number }>("/api/trash", { method: "DELETE" }), {
+        loading: "Emptying trash…",
+        success: "Trash emptied",
+        error: (e) => (e instanceof Error ? e.message : "Couldn't empty trash"),
+      });
       setItems([]);
       onRefresh();
+      void data;
+    } catch {
+      // toast.promise already surfaced the error
     }
   };
 

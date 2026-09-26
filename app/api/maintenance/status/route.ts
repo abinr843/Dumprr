@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { ok } from "@/lib/api/response";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -22,7 +22,7 @@ export async function GET() {
       .maybeSingle();
 
     if (error) {
-      return NextResponse.json(
+      return ok(
         { maintenance: false },
         {
           headers: {
@@ -35,7 +35,7 @@ export async function GET() {
 
     const maintenance = data?.value === "true" || data?.value === true;
 
-    return NextResponse.json(
+    return ok(
       { maintenance },
       {
         headers: {
@@ -46,7 +46,7 @@ export async function GET() {
     );
   } catch {
     // If we can't check, assume not in maintenance
-    return NextResponse.json(
+    return ok(
       { maintenance: false },
       {
         headers: {

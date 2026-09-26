@@ -26,12 +26,13 @@ export const ALLOWED_EXTENSIONS = [
   "gif",
 ] as const;
 
-export type AllowedExtension = (typeof ALLOWED_EXTENSIONS)[number];
+export type AllowedExtension = (typeof ALLOWED_EXTENSIONS)[number] | (string & {});
 
 /**
  * Canonical MIME types mapped to allowed extensions
  */
-export const EXTENSION_MIME_MAP: Record<AllowedExtension, string[]> = {
+export const EXTENSION_MIME_MAP: Record<string, string[]> = {
+  // Documents
   pdf: ["application/pdf"],
   doc: ["application/msword", "application/octet-stream"],
   docx: [
@@ -58,11 +59,28 @@ export const EXTENSION_MIME_MAP: Record<AllowedExtension, string[]> = {
     "application/csv",
     "application/vnd.ms-excel",
   ],
+  // Images
   jpg: ["image/jpeg"],
   jpeg: ["image/jpeg"],
   png: ["image/png"],
   webp: ["image/webp"],
   gif: ["image/gif"],
+  svg: ["image/svg+xml"],
+  // Web & Code
+  html: ["text/html", "application/xhtml+xml"],
+  htm: ["text/html"],
+  json: ["application/json", "text/plain"],
+  xml: ["application/xml", "text/xml"],
+  md: ["text/markdown", "text/plain"],
+  css: ["text/css"],
+  js: ["text/javascript", "application/javascript"],
+  ts: ["text/typescript", "text/plain"],
+  // Archives
+  zip: ["application/zip", "application/x-zip-compressed"],
+  // Audio & Video
+  mp3: ["audio/mpeg"],
+  mp4: ["video/mp4"],
+  wav: ["audio/wav"],
 };
 
 /**
@@ -107,6 +125,17 @@ export interface FileValidationResult {
 }
 
 /**
+ * Options for dynamic validation overrides.
+ * When provided, these override the hardcoded defaults.
+ */
+export interface ValidationOptions {
+  /** Max file size in bytes. Defaults to MAX_FILE_SIZE_BYTES (70 MB). */
+  maxSizeBytes?: number;
+  /** Allowed extensions list, or "*" for all. Defaults to ALLOWED_EXTENSIONS. */
+  allowedExtensions?: readonly string[] | "*";
+}
+
+/**
  * Extracts and normalizes the extension from a filename.
  */
 export function extractExtension(filename: string): string {
@@ -114,6 +143,52 @@ export function extractExtension(filename: string): string {
   if (parts.length <= 1) return "";
   const ext = parts.pop()?.toLowerCase() ?? "";
   return ext;
+}
+
+/**
+ * Normalizes allowed file extensions from settings or input.
+ * Strips leading wildcards, dots, and spaces (e.g., '*html', '*.html', '.html' -> 'html').
+ * Returns '*' if all types are allowed.
+ */
+export function normalizeAllowedExtensions(raw: unknown): string[] | "*" {
+  if (!raw) return "*";
+  let val = raw;
+  if (typeof val === "string") {
+    try {
+      val = JSON.parse(val);
+    } catch {}
+  }
+
+  if (Array.isArray(val)) {
+    const list = val
+      .map((s) => String(s).trim().toLowerCase())
+      .filter(Boolean);
+    if (list.includes("*") || list.includes("*.*") || list.length === 0) return "*";
+    const cleaned = list
+      .map((s) => s.replace(/^(\*\.?|\.)+/, ""))
+      .filter(Boolean);
+    return cleaned.length === 0 ? "*" : cleaned;
+  }
+
+  const str = String(val).trim();
+  if (str === "*" || str === "*.*" || str === ".*" || str.length === 0) {
+    return "*";
+  }
+
+  const rawTokens = str
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (rawTokens.includes("*") || rawTokens.includes("*.*") || rawTokens.length === 0) {
+    return "*";
+  }
+
+  const cleaned = rawTokens
+    .map((s) => s.replace(/^(\*\.?|\.)+/, ""))
+    .filter(Boolean);
+
+  return cleaned.length === 0 ? "*" : cleaned;
 }
 
 /**
@@ -266,7 +341,9 @@ export function validateMagicBytes(
     }
 
     default:
-      return { valid: false, reason: "DISALLOWED_EXTENSION" };
+      // For any dynamically allowed extensions (HTML, JSON, SVG, ZIP, MD, etc.)
+      // or wildcard '*', as long as they pass the executable check above, they are permitted.
+      return { valid: true };
   }
 }
 
@@ -275,9 +352,10 @@ export function validateMagicBytes(
  * Format: `<uuid>.<extension>` (e.g. `9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d.pdf`)
  * Never exposes or stores the user's raw filename in the bucket path.
  */
-export function generateStoragePath(extension: AllowedExtension): string {
+export function generateStoragePath(extension: string): string {
   const uuid = randomUUID();
-  return `${uuid}.${extension}`;
+  const cleanExt = extension.replace(/^\.+/, "").trim().toLowerCase();
+  return cleanExt ? `${uuid}.${cleanExt}` : uuid;
 }
 
 /**
@@ -286,8 +364,14 @@ export function generateStoragePath(extension: AllowedExtension): string {
 export function validateUploadedFile(
   filename: string,
   buffer: Uint8Array,
-  declaredMimeType?: string
+  declaredMimeType?: string,
+  options?: ValidationOptions
 ): FileValidationResult {
+  const effectiveMaxSize = options?.maxSizeBytes ?? MAX_FILE_SIZE_BYTES;
+  const rawAllowed = options?.allowedExtensions ?? ALLOWED_EXTENSIONS;
+  const effectiveAllowed =
+    rawAllowed === "*" ? "*" : normalizeAllowedExtensions(rawAllowed);
+  const isWildcard = effectiveAllowed === "*";
   const originalName = filename.trim();
   const sanitizedName = sanitizeFilename(originalName);
   const extStr = extractExtension(sanitizedName);
@@ -307,12 +391,13 @@ export function validateUploadedFile(
     };
   }
 
-  // 2. Enforce MAX_FILE_SIZE (70 MB)
-  if (sizeBytes > MAX_FILE_SIZE_BYTES) {
+  // 2. Enforce max file size
+  if (sizeBytes > effectiveMaxSize) {
     const sizeMb = (sizeBytes / (1024 * 1024)).toFixed(1);
+    const limitMb = (effectiveMaxSize / (1024 * 1024)).toFixed(0);
     return {
       isValid: false,
-      error: `File size (${sizeMb} MB) exceeds maximum permitted limit of 70 MB.`,
+      error: `File size (${sizeMb} MB) exceeds maximum permitted limit of ${limitMb} MB.`,
       securityReason: "SIZE_LIMIT_EXCEEDED",
       originalName,
       sanitizedName,
@@ -322,19 +407,22 @@ export function validateUploadedFile(
     };
   }
 
-  // 3. Validate Extension against Whitelist
-  const isAllowedExt = (ALLOWED_EXTENSIONS as readonly string[]).includes(extStr);
-  if (!isAllowedExt) {
-    return {
-      isValid: false,
-      error: `File extension '.${extStr || "unknown"}' is not permitted. Allowed: ${ALLOWED_EXTENSIONS.join(", ")}.`,
-      securityReason: "DISALLOWED_EXTENSION",
-      originalName,
-      sanitizedName,
-      extension: null,
-      mimeType: declaredMimeType || "application/octet-stream",
-      sizeBytes,
-    };
+  // 3. Validate Extension against Whitelist (skip if wildcard '*')
+  if (!isWildcard) {
+    const allowedList = effectiveAllowed as readonly string[];
+    const isAllowedExt = allowedList.includes(extStr);
+    if (!isAllowedExt) {
+      return {
+        isValid: false,
+        error: `File extension '.${extStr || "unknown"}' is not permitted. Allowed: ${allowedList.join(", ")}.`,
+        securityReason: "DISALLOWED_EXTENSION",
+        originalName,
+        sanitizedName,
+        extension: null,
+        mimeType: declaredMimeType || "application/octet-stream",
+        sizeBytes,
+      };
+    }
   }
 
   const extension = extStr as AllowedExtension;
@@ -363,12 +451,12 @@ export function validateUploadedFile(
     };
   }
 
-  // 5. Determine canonical MIME type
-  const canonicalMimes = EXTENSION_MIME_MAP[extension];
+  // 5. Determine canonical MIME type safely
+  const canonicalMimes = EXTENSION_MIME_MAP[extStr];
   const mimeType =
-    declaredMimeType && canonicalMimes.includes(declaredMimeType)
+    declaredMimeType && (canonicalMimes ? canonicalMimes.includes(declaredMimeType) : true)
       ? declaredMimeType
-      : canonicalMimes[0];
+      : canonicalMimes?.[0] || declaredMimeType || "application/octet-stream";
 
   // 6. Generate UUID Storage Path
   const storagePath = generateStoragePath(extension);

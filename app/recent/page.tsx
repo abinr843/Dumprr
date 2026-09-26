@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { LayoutShell } from "@/components/layout/LayoutShell";
 import { ActivityFeed } from "@/components/feed/ActivityFeed";
+import { RecentTrayClient } from "@/components/recent/RecentTrayClient";
 import { getSession } from "@/lib/auth/session";
 import { getRecentFeed } from "@/lib/feed/recent";
 import { isAdmin } from "@/lib/auth/roles";
@@ -58,6 +59,9 @@ export default async function RecentActivityPage() {
             Real-time chronological timeline of announcements and files in your workspace.
           </p>
         </div>
+
+        {/* Recently viewed (local-first history) */}
+        <RecentTrayClient />
 
         {/* Activity Feed — hydrated with server data, full width on mobile without nested card borders */}
         <ActivityFeed

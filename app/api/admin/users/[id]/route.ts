@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, badRequest, notFound, forbidden, fail } from "@/lib/api/response";
+import { humanizeTechnicalError } from "@/lib/api/human-errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   authenticateAdminApi,
@@ -44,10 +46,7 @@ export async function PATCH(
     await admin.auth.admin.getUserById(id);
 
   if (fetchErr || !targetAuthData?.user) {
-    return NextResponse.json(
-      { error: "User not found" },
-      { status: 404 }
-    );
+    return notFound("That user no longer exists.");
   }
 
   const targetUser = targetAuthData.user;
@@ -55,10 +54,7 @@ export async function PATCH(
 
   // Protect root administrator from being disabled/demoted/deleted
   if (isRootAdmin && (action === "disable" || role === "viewer" || role === "member")) {
-    return NextResponse.json(
-      { error: "Cannot disable or demote the root administrator" },
-      { status: 403 }
-    );
+    return forbidden("The root administrator account can't be disabled or demoted.");
   }
 
   // Block promotion to admin/superadmin
@@ -73,10 +69,7 @@ export async function PATCH(
       user_agent: userAgent,
       metadata: { reason: "Cannot promote to admin role", requestedRole: role },
     });
-    return NextResponse.json(
-      { error: "Cannot promote users to administrator roles" },
-      { status: 400 }
-    );
+    return badRequest("Users can't be promoted to administrator roles here.");
   }
 
   try {
@@ -98,7 +91,7 @@ export async function PATCH(
         user_agent: userAgent,
       });
 
-      return NextResponse.json({ message: "User disabled successfully" });
+      return ok({ message: "User disabled successfully" });
     }
 
     if (action === "enable") {
@@ -118,7 +111,7 @@ export async function PATCH(
         user_agent: userAgent,
       });
 
-      return NextResponse.json({ message: "User enabled successfully" });
+      return ok({ message: "User enabled successfully" });
     }
 
     if (action === "reset_access") {
@@ -130,9 +123,10 @@ export async function PATCH(
         });
 
       if (linkError) {
-        return NextResponse.json(
-          { error: `Failed to generate recovery link: ${linkError.message}` },
-          { status: 500 }
+        return fail(
+          "INTERNAL_ERROR",
+          humanizeTechnicalError(linkError, "Couldn't create a recovery link. Please try again."),
+          500
         );
       }
 
@@ -147,7 +141,7 @@ export async function PATCH(
         user_agent: userAgent,
       });
 
-      return NextResponse.json({
+      return ok({
         message: "Access reset initiated. Recovery link generated.",
         recoveryLink: linkData?.properties?.action_link || null,
       });
@@ -169,9 +163,10 @@ export async function PATCH(
         .eq("id", id);
 
       if (updateErr) {
-        return NextResponse.json(
-          { error: `Failed to update user: ${updateErr.message}` },
-          { status: 500 }
+        return fail(
+          "INTERNAL_ERROR",
+          humanizeTechnicalError(updateErr, "Couldn't update that user. Please try again."),
+          500
         );
       }
 
@@ -187,17 +182,15 @@ export async function PATCH(
         metadata: updates,
       });
 
-      return NextResponse.json({ message: "User updated successfully" });
+      return ok({ message: "User updated successfully" });
     }
 
-    return NextResponse.json(
-      { error: "No valid action or update fields provided" },
-      { status: 400 }
-    );
+    return badRequest("Please choose an action (disable, enable, reset access) or update a field first.");
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to update user" },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(err, "Couldn't update that user. Please try again."),
+      500
     );
   }
 }
@@ -222,10 +215,7 @@ export async function DELETE(
     await admin.auth.admin.getUserById(id);
 
   if (fetchErr || !targetAuthData?.user) {
-    return NextResponse.json(
-      { error: "User not found" },
-      { status: 404 }
-    );
+    return notFound("That user no longer exists.");
   }
 
   const targetUser = targetAuthData.user;
@@ -244,18 +234,12 @@ export async function DELETE(
       user_agent: userAgent,
       metadata: { reason: "Cannot delete root administrator" },
     });
-    return NextResponse.json(
-      { error: "Cannot delete the root administrator" },
-      { status: 403 }
-    );
+    return forbidden("The root administrator account can't be deleted.");
   }
 
   // Cannot delete self
   if (id === guard.auth.user.id) {
-    return NextResponse.json(
-      { error: "Cannot delete your own account" },
-      { status: 400 }
-    );
+    return badRequest("You can't delete your own account.");
   }
 
   try {
@@ -263,9 +247,10 @@ export async function DELETE(
     const { error: deleteError } = await admin.auth.admin.deleteUser(id);
 
     if (deleteError) {
-      return NextResponse.json(
-        { error: `Failed to delete user: ${deleteError.message}` },
-        { status: 500 }
+      return fail(
+        "INTERNAL_ERROR",
+        humanizeTechnicalError(deleteError, "Couldn't delete that user. Please try again."),
+        500
       );
     }
 
@@ -283,11 +268,12 @@ export async function DELETE(
       user_agent: userAgent,
     });
 
-    return NextResponse.json({ message: "User deleted successfully" });
+    return ok({ message: "User deleted successfully" });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to delete user" },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(err, "Couldn't delete that user. Please try again."),
+      500
     );
   }
 }

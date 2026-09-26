@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { ok } from "@/lib/api/response";
 
 /**
  * GET /api/health
@@ -18,5 +18,5 @@ export async function GET() {
     },
   };
 
-  return NextResponse.json(checks);
+  return ok(checks);
 }

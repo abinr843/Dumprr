@@ -26,6 +26,10 @@ export interface SearchResultItem {
   slug?: string;
   status?: string;
   publishedAt?: string;
+  tags?: string[];
+  postType?: string;
+  codeLanguage?: string | null;
+  snippet?: string;
   /** Folder-specific */
   color?: string;
   parentId?: string | null;

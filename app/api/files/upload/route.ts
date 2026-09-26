@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  ok,
+  fail,
+  unauthorized,
+  forbidden,
+} from "@/lib/api/response";
+import {
+  humanizeTechnicalError,
+  humanizeUploadRejection,
+} from "@/lib/api/human-errors";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAdmin } from "@/lib/auth/roles";
 import type { UserRole } from "@/types/database.types";
 import {
   validateUploadedFile,
-  MAX_FILE_SIZE_BYTES,
   ALLOWED_EXTENSIONS,
 } from "@/lib/storage/file-validation";
 import {
@@ -20,6 +29,11 @@ import {
   getRateLimitIdentifier,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
+import {
+  getStorageCapBytes,
+  getMaxFileSizeBytes,
+  getAllowedFileTypes,
+} from "@/lib/settings/system-settings";
 
 // Next.js Route Segment Config
 export const runtime = "nodejs";
@@ -155,10 +169,7 @@ export async function POST(req: NextRequest) {
       error: "Authentication required for upload",
     });
 
-    return NextResponse.json(
-      { error: "Unauthorized: Authentication required" },
-      { status: 401 }
-    );
+    return unauthorized("Please sign in to upload files.");
   }
 
   const role = (profile?.role as UserRole) || "viewer";
@@ -171,26 +182,14 @@ export async function POST(req: NextRequest) {
       error: `User ${user.email} with role '${role}' attempted file upload`,
     });
 
-    return NextResponse.json(
-      { error: "Forbidden: Admin privileges required to upload files" },
-      { status: 403 }
-    );
+    return forbidden("Only admins can upload files.");
   }
 
-  // 2a. Storage Cap Enforcement (8 GB default, configurable via system_settings)
+  // 2a. Storage Cap Enforcement (dynamic from system_settings)
   const adminDbClient = createAdminClient();
-  const DEFAULT_STORAGE_CAP = 8 * 1024 * 1024 * 1024; // 8 GB
-  let storageCap = DEFAULT_STORAGE_CAP;
-
-  const { data: capSetting } = await adminDbClient
-    .from("system_settings")
-    .select("value")
-    .eq("key", "storage.storage_cap_bytes")
-    .single();
-  if (capSetting?.value) {
-    const parsed = parseInt(String(capSetting.value), 10);
-    if (!isNaN(parsed) && parsed > 0) storageCap = parsed;
-  }
+  const storageCap = await getStorageCapBytes();
+  const maxFileSize = await getMaxFileSizeBytes();
+  const allowedTypes = await getAllowedFileTypes();
 
   // Get current storage usage
   const { data: usageFiles } = await adminDbClient
@@ -206,13 +205,11 @@ export async function POST(req: NextRequest) {
       const gb = b / (1024 * 1024 * 1024);
       return `${gb.toFixed(2)} GB`;
     };
-    return NextResponse.json(
-      {
-        error: `Storage limit reached. Used ${formatBytes(currentUsage)} of ${formatBytes(storageCap)}. Delete files or increase the storage cap to continue uploading.`,
-        code: "STORAGE_FULL",
-        usage: { usedBytes: currentUsage, capBytes: storageCap },
-      },
-      { status: 413 }
+    return fail(
+      "STORAGE_FULL",
+      `Storage is full (${formatBytes(currentUsage)} of ${formatBytes(storageCap)} used). Please delete files or ask an admin to raise the limit.`,
+      413,
+      { usage: { usedBytes: currentUsage, capBytes: storageCap } }
     );
   }
 
@@ -221,17 +218,19 @@ export async function POST(req: NextRequest) {
   try {
     formData = await req.formData();
   } catch (err) {
-    return NextResponse.json(
-      { error: "Invalid form data: Failed to parse multipart payload" },
-      { status: 400 }
+    return fail(
+      "BAD_REQUEST",
+      "We couldn't read that upload. Please try again.",
+      400
     );
   }
 
   const fileEntry = formData.get("file");
   if (!fileEntry || !(fileEntry instanceof Blob)) {
-    return NextResponse.json(
-      { error: "Bad Request: No file provided in 'file' form field" },
-      { status: 400 }
+    return fail(
+      "BAD_REQUEST",
+      "No file was attached. Please choose a file and try again.",
+      400
     );
   }
 
@@ -260,25 +259,25 @@ export async function POST(req: NextRequest) {
       securityReason: "STORAGE_CAP_EXCEEDED",
       error: `Storage cap of ${formatBytes(storageCap)} would be exceeded by upload of ${formatBytes(buffer.length)}`,
     });
-    return NextResponse.json(
-      {
-        error: `Upload rejected: Storage cap (${formatBytes(storageCap)}) would be exceeded. Available space: ${formatBytes(Math.max(0, storageCap - currentUsage))}.`,
-        code: "STORAGE_CAP_EXCEEDED",
-        usage: { usedBytes: currentUsage, capBytes: storageCap, fileBytes: buffer.length },
-      },
-      { status: 413 }
+    return fail(
+      "STORAGE_FULL",
+      `There's not enough space left for this file (needs ${formatBytes(buffer.length)}, only ${formatBytes(Math.max(0, storageCap - currentUsage))} free). Please delete files or ask an admin to raise the limit.`,
+      413,
+      { usage: { usedBytes: currentUsage, capBytes: storageCap, fileBytes: buffer.length } }
     );
   }
 
-  // 3. Server-Side Binary Magic Bytes & Extension Validation
-  const validation = validateUploadedFile(rawFilename, buffer, fileEntry.type);
+  // 3. Server-Side Binary Magic Bytes & Extension Validation (dynamic limits)
+  const validation = validateUploadedFile(rawFilename, buffer, fileEntry.type, {
+    maxSizeBytes: maxFileSize,
+    allowedExtensions: allowedTypes,
+  });
 
   if (!validation.isValid) {
     const isSecurityThreat =
       validation.securityReason === "DISGUISED_EXECUTABLE" ||
       validation.securityReason === "MAGIC_BYTES_MISMATCH" ||
       validation.securityReason === "INVALID_TEXT_ENCODING";
-
     if (isSecurityThreat) {
       await logSecurityUploadRejected({
         userId: user.id,
@@ -303,14 +302,28 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json(
+    const rejectionCode =
+      validation.securityReason === "SIZE_LIMIT_EXCEEDED"
+        ? "FILE_TOO_LARGE"
+        : validation.securityReason === "DISALLOWED_EXTENSION"
+          ? "FILE_TYPE_NOT_ALLOWED"
+          : isSecurityThreat
+            ? "SECURITY_REJECTED"
+            : "VALIDATION_FAILED";
+
+    return fail(
+      rejectionCode as "FILE_TOO_LARGE" | "FILE_TYPE_NOT_ALLOWED" | "SECURITY_REJECTED" | "VALIDATION_FAILED",
+      humanizeUploadRejection(validation.securityReason, {
+        extension: validation.extension,
+        maxBytes: maxFileSize,
+        allowed: allowedTypes,
+      }),
+      422,
       {
-        error: validation.error,
         securityReason: validation.securityReason,
-        maxSizeBytes: MAX_FILE_SIZE_BYTES,
-        allowedExtensions: ALLOWED_EXTENSIONS,
-      },
-      { status: 422 }
+        maxSizeBytes: maxFileSize,
+        allowedExtensions: allowedTypes === "*" ? ALLOWED_EXTENSIONS : allowedTypes,
+      }
     );
   }
 
@@ -347,9 +360,13 @@ export async function POST(req: NextRequest) {
       error: `Storage upload error: ${storageError.message}`,
     });
 
-    return NextResponse.json(
-      { error: `Storage upload failed: ${storageError.message}` },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(
+        storageError,
+        "We couldn't store your file. Please try again in a moment."
+      ),
+      500
     );
   }
 
@@ -390,8 +407,11 @@ export async function POST(req: NextRequest) {
       (dbError as any)?.code === "PGRST205";
 
     const userFriendlyError = isMissingTable
-      ? "Database table 'public.files' not found. Please execute the SQL migration in your Supabase SQL Editor (supabase/run_in_supabase_sql_editor.sql)."
-      : `Database record creation failed: ${dbError?.message ?? "Unknown database error"}`;
+      ? "The database isn't set up for uploads yet. Please ask an admin to run the latest migration."
+      : humanizeTechnicalError(
+          dbError,
+          "We couldn't save your file record. Please try again."
+        );
 
     await logFileUploadFailed({
       userId: user.id,
@@ -403,10 +423,7 @@ export async function POST(req: NextRequest) {
       error: userFriendlyError,
     });
 
-    return NextResponse.json(
-      { error: userFriendlyError },
-      { status: 500 }
-    );
+    return fail("INTERNAL_ERROR", userFriendlyError, 500);
   }
 
   // 7. Log upload completed
@@ -421,9 +438,8 @@ export async function POST(req: NextRequest) {
     userAgent,
   });
 
-  return NextResponse.json(
+  return ok(
     {
-      success: true,
       file: {
         id: fileRecord.id,
         name: fileRecord.name,

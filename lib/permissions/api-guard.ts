@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { unauthorized, forbidden } from "@/lib/api/response";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAdmin } from "@/lib/auth/roles";
@@ -71,10 +72,7 @@ export async function authenticateAdminApi(
         metadata: { reason: "Invalid or expired token" },
       });
       return {
-        error: NextResponse.json(
-          { error: "Unauthorized: Invalid or expired token" },
-          { status: 401 }
-        ),
+        error: unauthorized("Your session has expired. Please sign in again."),
       };
     }
 
@@ -111,10 +109,7 @@ export async function authenticateAdminApi(
         metadata: { reason: "No active session" },
       });
       return {
-        error: NextResponse.json(
-          { error: "Unauthorized: Authentication required" },
-          { status: 401 }
-        ),
+        error: unauthorized("Please sign in to continue."),
       };
     }
 
@@ -146,10 +141,7 @@ export async function authenticateAdminApi(
       metadata: { email: user?.email, role },
     });
     return {
-      error: NextResponse.json(
-        { error: "Forbidden: Admin privileges required" },
-        { status: 403 }
-      ),
+      error: forbidden("Only admins can do that. Please sign in with an admin account."),
     };
   }
 
@@ -197,10 +189,7 @@ export async function authenticateUserApi(
         metadata: { reason: "Invalid or expired token" },
       });
       return {
-        error: NextResponse.json(
-          { error: "Unauthorized: Invalid or expired token" },
-          { status: 401 }
-        ),
+        error: unauthorized("Your session has expired. Please sign in again."),
       };
     }
 
@@ -236,10 +225,7 @@ export async function authenticateUserApi(
         metadata: { reason: "No active session" },
       });
       return {
-        error: NextResponse.json(
-          { error: "Unauthorized: Authentication required" },
-          { status: 401 }
-        ),
+        error: unauthorized("Please sign in to continue."),
       };
     }
 

@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, fail } from "@/lib/api/response";
+import { humanizeTechnicalError } from "@/lib/api/human-errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth/session";
 import { isAdmin } from "@/lib/auth/roles";
@@ -84,13 +86,14 @@ export async function GET(req: NextRequest) {
       user_agent: ua,
       metadata: { error: error.message },
     });
-    return NextResponse.json(
-      { error: `Failed to fetch files: ${error.message}` },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(error, "Couldn't load files. Please try again."),
+      500
     );
   }
 
-  return NextResponse.json({
+  return ok({
     files: files || [],
     total: count ?? 0,
     limit,

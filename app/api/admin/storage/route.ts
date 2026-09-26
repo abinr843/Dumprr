@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok } from "@/lib/api/response";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { authenticateAdminApi } from "@/lib/permissions/api-guard";
 
@@ -157,7 +158,7 @@ export async function GET(req: NextRequest) {
     createdAt: f.created_at,
   }));
 
-  return NextResponse.json({
+  return ok({
     usage: {
       usedBytes: totalUsedBytes,
       capBytes: storageCap,

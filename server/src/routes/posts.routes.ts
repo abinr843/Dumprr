@@ -17,6 +17,7 @@ import { logAction } from "../services/audit.service.js";
 import { sanitizePostContent } from "../services/security.service.js";
 import { AUDIT_ACTIONS } from "../types/index.js";
 import { asyncHandler } from "../middleware/error-handler.js";
+import { humanizeTechnicalError } from "../utils/api-response.js";
 
 const router = Router();
 
@@ -62,7 +63,7 @@ router.get(
     const { data: posts, error, count } = await query;
 
     if (error) {
-      res.status(500).json({ error: `Failed to fetch posts: ${error.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(error, "Couldn't load posts. Please try again.") });
       return;
     }
 
@@ -107,7 +108,7 @@ router.post(
       .single();
 
     if (insertErr) {
-      res.status(500).json({ error: `Post creation failed: ${insertErr.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(insertErr, "Couldn't create your post. Please try again.") });
       return;
     }
 
@@ -216,7 +217,7 @@ router.patch(
       .single();
 
     if (updateErr) {
-      res.status(500).json({ error: `Update failed: ${updateErr.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(updateErr, "Couldn't save your changes. Please try again.") });
       return;
     }
 
@@ -344,7 +345,7 @@ router.delete(
     const { error: deleteErr } = await admin.from("posts").delete().eq("id", id);
 
     if (deleteErr) {
-      res.status(500).json({ error: `Permanent deletion failed: ${deleteErr.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(deleteErr, "Couldn't permanently delete this post. Please try again.") });
       return;
     }
 

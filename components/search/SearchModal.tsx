@@ -13,14 +13,18 @@ import {
   Folder,
   ArrowRight,
   Loader2,
-  Clock,
-  HardDrive,
   Download,
   Eye,
+  Code,
+  Tag,
 } from "lucide-react";
 import type { SearchCategory, SearchResultItem, SearchApiResponse } from "@/types/search";
 import { FilePreviewModal } from "@/components/storage/FilePreviewModal";
 import { PostDetailModal } from "@/components/posts/PostDetailModal";
+import { BookmarkButton } from "@/components/bookmarks/BookmarkButton";
+import { RecentTray } from "@/components/recent/RecentTray";
+import { apiFetch } from "@/lib/client/api";
+import { toast } from "@/components/ui/Toast";
 import type { PostWithAuthor } from "@/types/posts";
 
 interface SearchModalProps {
@@ -63,6 +67,7 @@ export function SearchModal({ isOpen, onClose, isAdmin = false }: SearchModalPro
   const [category, setCategory] = useState<SearchCategory>("all");
   const [results, setResults] = useState<SearchApiResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
   const [viewPost, setViewPost] = useState<PostWithAuthor | null>(null);
 
@@ -109,22 +114,23 @@ export function SearchModal({ isOpen, onClose, isAdmin = false }: SearchModalPro
   useEffect(() => {
     if (!query.trim()) {
       setResults(null);
+      setSearchError(null);
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    setSearchError(null);
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(
+        const data = await apiFetch<SearchApiResponse>(
           `/api/search?q=${encodeURIComponent(query.trim())}&category=${category}`
         );
-        if (res.ok) {
-          const data = await res.json();
-          setResults(data);
-        }
+        setResults(data);
       } catch (err) {
-        console.error("Search error", err);
+        const msg = err instanceof Error ? err.message : "Search isn't working right now";
+        setSearchError(msg);
+        setResults(null);
       } finally {
         setLoading(false);
       }
@@ -141,14 +147,12 @@ export function SearchModal({ isOpen, onClose, isAdmin = false }: SearchModalPro
       setPreviewFileId(item.id);
     } else if (item.type === "post") {
       try {
-        const res = await fetch(`/api/posts/${item.id}`);
-        if (res.ok) {
-          const data = await res.json();
-          setViewPost(data.post);
-        }
+        const data = await apiFetch<{ post: PostWithAuthor }>(`/api/posts/${item.id}`);
+        if (data.post) setViewPost(data.post);
       } catch (e) {
-        router.push("/posts");
-        onClose();
+        toast.error("Couldn't open that post", {
+          description: e instanceof Error ? e.message : undefined,
+        });
       }
     }
   };
@@ -225,11 +229,39 @@ export function SearchModal({ isOpen, onClose, isAdmin = false }: SearchModalPro
               <div className="quick-hints">
                 <span>Tip: Search by filename, extension, post content, or folder</span>
               </div>
+              <div className="operator-hints">
+                <span className="op"><Tag size={11} /> tag:security, #v1.2</span>
+                <span className="op"><Code size={11} /> type:code, type:file</span>
+                <span className="op">ext:pdf</span>
+                <span className="op">min-size:5mb</span>
+                <span className="op">author:admin</span>
+              </div>
+              <div className="recent-wrap">
+                <RecentTray
+                  onSelectFile={(id) => setPreviewFileId(id)}
+                  onSelectPost={async (id) => {
+                    try {
+                      const res = await fetch(`/api/posts/${id}`);
+                      if (res.ok) {
+                        const data = await res.json();
+                        setViewPost(data.post);
+                      }
+                    } catch {
+                      /* noop */
+                    }
+                  }}
+                />
+              </div>
             </div>
           ) : loading && !results ? (
             <div className="search-loading">
               <Loader2 size={24} className="spin" />
               <span>Searching workspace…</span>
+            </div>
+          ) : searchError ? (
+            <div className="search-no-results">
+              <p>Search isn&apos;t working right now</p>
+              <span>{searchError}</span>
             </div>
           ) : allItems.length === 0 ? (
             <div className="search-no-results">
@@ -284,6 +316,9 @@ export function SearchModal({ isOpen, onClose, isAdmin = false }: SearchModalPro
                         </div>
                       </div>
                       <div className="result-quick-actions" onClick={(e) => e.stopPropagation()}>
+                        <span onClick={(e) => e.stopPropagation()}>
+                          <BookmarkButton itemType="file" itemId={item.id} />
+                        </span>
                         <button
                           type="button"
                           className="quick-action-btn"
@@ -322,14 +357,31 @@ export function SearchModal({ isOpen, onClose, isAdmin = false }: SearchModalPro
                     >
                       <div className="result-icon-box">{getItemIcon(item)}</div>
                       <div className="result-info">
-                        <span className="result-title">{item.title}</span>
+                        <span className="result-title">
+                          {item.title}
+                          {item.postType === "code" && <span className="code-mini">{"</>"} CODE</span>}
+                          {item.codeLanguage && <span className="lang-mini">{item.codeLanguage}</span>}
+                        </span>
                         {item.description && (
                           <span className="result-sub excerpt">
                             {item.description}
                           </span>
                         )}
+                        {item.snippet && item.snippet !== item.description && (
+                          <span className="result-sub snippet">{item.snippet}</span>
+                        )}
+                        {item.tags && item.tags.length > 0 && (
+                          <span className="result-tags-row">
+                            {item.tags.slice(0, 4).map((t) => (
+                              <span key={t} className="tag-mini">#{t}</span>
+                            ))}
+                          </span>
+                        )}
                       </div>
                       <span className="post-status-pill">{item.status || "post"}</span>
+                      <span onClick={(e) => e.stopPropagation()}>
+                        <BookmarkButton itemType="post" itemId={item.id} />
+                      </span>
                       <ArrowRight size={15} className="result-arrow" />
                     </div>
                   ))}
@@ -515,6 +567,58 @@ export function SearchModal({ isOpen, onClose, isAdmin = false }: SearchModalPro
         .quick-hints {
           font-size: var(--text-xs);
           color: var(--text-muted);
+        }
+        .operator-hints {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          justify-content: center;
+          margin-top: 8px;
+        }
+        .op {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 11px;
+          font-family: monospace;
+          background: var(--bg-input);
+          border: 1px solid var(--border-subtle);
+          color: var(--color-primary);
+          padding: 2px 8px;
+          border-radius: 9999px;
+        }
+        .recent-wrap { width: 100%; max-width: 560px; margin-top: 12px; text-align: left; }
+        .code-mini {
+          font-size: 9px;
+          font-weight: 800;
+          background: rgba(99,102,241,0.15);
+          color: var(--color-primary);
+          padding: 1px 6px;
+          border-radius: 9999px;
+          margin-left: 6px;
+          vertical-align: 1px;
+        }
+        .lang-mini {
+          font-size: 9px;
+          font-weight: 700;
+          color: var(--text-muted);
+          border: 1px solid var(--border-subtle);
+          padding: 1px 6px;
+          border-radius: 9999px;
+          margin-left: 4px;
+          vertical-align: 1px;
+        }
+        .result-sub.snippet {
+          font-style: italic;
+          display: block;
+        }
+        .result-tags-row { display: flex; gap: 4px; flex-wrap: wrap; }
+        .tag-mini {
+          font-size: 10px;
+          color: var(--color-primary);
+          background: rgba(99,102,241,0.08);
+          padding: 0 6px;
+          border-radius: 9999px;
         }
         .search-results-list {
           display: flex;

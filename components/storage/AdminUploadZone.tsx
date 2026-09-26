@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   UploadCloud,
   FileText,
@@ -19,8 +19,11 @@ import {
   MAX_FILE_SIZE_BYTES,
   ALLOWED_EXTENSIONS,
   extractExtension,
+  normalizeAllowedExtensions,
   type AllowedExtension,
 } from "@/lib/storage/file-validation";
+import { humanizeUploadRejection } from "@/lib/api/human-errors";
+import { toast } from "@/components/ui/Toast";
 
 export interface UploadQueueItem {
   id: string;
@@ -52,6 +55,17 @@ function formatBytes(bytes: number, decimals = 1): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
+/** Human fallback when the server response has no usable message. */
+function xhrStatusMessage(status: number, fileName: string): string {
+  if (status === 0) return "We couldn't reach the server. Please check your connection and try again.";
+  if (status === 401) return "Your session has expired. Please sign in again, then retry.";
+  if (status === 403) return "Only admins can upload files.";
+  if (status === 413) return `"${fileName}" is too large. Please try a smaller file.`;
+  if (status === 422) return `We couldn't accept "${fileName}". Please check the format and try again.`;
+  if (status === 429) return "You're uploading too quickly. Please wait a moment and retry.";
+  if (status >= 500) return "Something went wrong on our end. Please try again in a moment.";
+  return `Upload failed${status ? ` (HTTP ${status})` : ""}. Please try again.`;
+}
 /** Get appropriate icon based on file extension */
 function getFileIcon(filename: string) {
   const ext = extractExtension(filename);
@@ -72,21 +86,51 @@ export function AdminUploadZone({ folderId, onUploadSuccess }: AdminUploadZonePr
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Dynamic upload limits from system_settings
+  const [dynamicMaxSize, setDynamicMaxSize] = useState<number>(MAX_FILE_SIZE_BYTES);
+  const [dynamicAllowed, setDynamicAllowed] = useState<readonly string[] | "*">(ALLOWED_EXTENSIONS);
+
+  useEffect(() => {
+    let active = true;
+    async function loadLimits() {
+      try {
+        const res = await fetch("/api/admin/settings");
+        if (!res.ok) return;
+        const data = await res.json();
+        const settings = data.settings || [];
+        for (const s of settings) {
+          if (s.key === "storage.max_file_size_bytes" && active) {
+            let val = s.value;
+            if (typeof val === "string") try { val = JSON.parse(val); } catch {}
+            if (typeof val === "number" && val > 0) setDynamicMaxSize(val);
+          }
+          if (s.key === "storage.allowed_file_types" && active) {
+            setDynamicAllowed(normalizeAllowedExtensions(s.value));
+          }
+        }
+      } catch {
+        // Keep defaults on failure
+      }
+    }
+    loadLimits();
+    return () => { active = false; };
+  }, []);
+
   /**
    * Upload an individual file via XMLHttpRequest to enable progress tracking and abortability
    */
   const startUpload = useCallback(
     (item: UploadQueueItem) => {
-      // 1. Client-side pre-validation
+      // 1. Client-side pre-validation (uses dynamic limits from settings)
       const ext = extractExtension(item.file.name);
-      if (item.file.size > MAX_FILE_SIZE_BYTES) {
+      if (item.file.size > dynamicMaxSize) {
         setQueue((prev) =>
           prev.map((q) =>
             q.id === item.id
               ? {
                   ...q,
                   status: "error",
-                  errorMessage: `File exceeds 70 MB limit (${formatBytes(item.file.size)})`,
+                  errorMessage: `This file is too large. Please upload a file smaller than ${formatBytes(dynamicMaxSize)} (this one is ${formatBytes(item.file.size)}).`,
                 }
               : q
           )
@@ -94,14 +138,19 @@ export function AdminUploadZone({ folderId, onUploadSuccess }: AdminUploadZonePr
         return;
       }
 
-      if (!(ALLOWED_EXTENSIONS as readonly string[]).includes(ext)) {
+      const normalizedAllowed =
+        dynamicAllowed === "*" ? "*" : normalizeAllowedExtensions(dynamicAllowed);
+      if (normalizedAllowed !== "*" && !normalizedAllowed.includes(ext)) {
         setQueue((prev) =>
           prev.map((q) =>
             q.id === item.id
               ? {
                   ...q,
                   status: "error",
-                  errorMessage: `Extension '.${ext || "unknown"}' not permitted`,
+                  errorMessage: humanizeUploadRejection("DISALLOWED_EXTENSION", {
+                    extension: ext,
+                    allowed: normalizedAllowed,
+                  }),
                 }
               : q
           )
@@ -179,12 +228,17 @@ export function AdminUploadZone({ folderId, onUploadSuccess }: AdminUploadZonePr
             );
           }
         } else {
-          let errorMsg = `Upload failed (${xhr.status})`;
+          let errorMsg = xhrStatusMessage(xhr.status, item.name);
           try {
             const errRes = JSON.parse(xhr.responseText);
-            if (errRes.error) errorMsg = errRes.error;
+            // Standard envelope ({error, code}) or legacy ({error: string})
+            if (typeof errRes.error === "string" && errRes.error.trim()) {
+              errorMsg = errRes.error;
+            } else if (typeof errRes.message === "string" && errRes.message.trim()) {
+              errorMsg = errRes.message;
+            }
           } catch {
-            // Ignore parse errors
+            // Ignore parse errors — keep the status-based message
           }
           setQueue((prev) =>
             prev.map((q) =>
@@ -226,7 +280,7 @@ export function AdminUploadZone({ folderId, onUploadSuccess }: AdminUploadZonePr
       // Fire request
       xhr.send(formData);
     },
-    [folderId, onUploadSuccess]
+    [folderId, onUploadSuccess, dynamicMaxSize, dynamicAllowed]
   );
 
   /**
@@ -293,7 +347,6 @@ export function AdminUploadZone({ folderId, onUploadSuccess }: AdminUploadZonePr
   const handleRetry = (item: UploadQueueItem) => {
     startUpload(item);
   };
-
   // Remove item from queue
   const handleRemove = (itemId: string) => {
     setQueue((prev) => {
@@ -311,6 +364,37 @@ export function AdminUploadZone({ folderId, onUploadSuccess }: AdminUploadZonePr
   };
 
   const completedCount = queue.filter((q) => q.status === "completed").length;
+
+  // Summary toast once a batch fully settles (only for newly finished items)
+  const seenTerminalRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    // Prune ids of removed items
+    const liveIds = new Set(queue.map((q) => q.id));
+    for (const id of [...seenTerminalRef.current]) {
+      if (!liveIds.has(id)) seenTerminalRef.current.delete(id);
+    }
+    if (queue.length === 0) return;
+    const terminal = queue.filter(
+      (q) => q.status === "completed" || q.status === "error" || q.status === "cancelled"
+    );
+    if (terminal.length !== queue.length) return;
+    const fresh = terminal.filter((q) => !seenTerminalRef.current.has(q.id));
+    if (fresh.length === 0) return;
+    terminal.forEach((q) => seenTerminalRef.current.add(q.id));
+    const done = queue.filter((q) => q.status === "completed").length;
+    const failed = queue.filter((q) => q.status === "error").length;
+    if (failed === 0 && done > 0) {
+      toast.success(done === 1 ? "File uploaded" : `${done} files uploaded`);
+    } else if (failed > 0 && done === 0) {
+      toast.error(failed === 1 ? "Upload failed" : `${failed} uploads failed`, {
+        description: "Check the queue below for what to fix.",
+      });
+    } else if (failed > 0) {
+      toast.info("Uploads finished", {
+        description: `${done} succeeded, ${failed} failed — check the queue.`,
+      });
+    }
+  }, [queue]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
@@ -349,7 +433,15 @@ export function AdminUploadZone({ folderId, onUploadSuccess }: AdminUploadZonePr
           ref={fileInputRef}
           type="file"
           multiple
-          accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.csv,.jpg,.jpeg,.png,.webp,.gif"
+          accept={
+            (() => {
+              const allowed = Array.isArray(dynamicAllowed)
+                ? dynamicAllowed
+                : normalizeAllowedExtensions(dynamicAllowed);
+              if (allowed === "*") return undefined;
+              return (allowed as string[]).map((e: string) => `.${e}`).join(",");
+            })()
+          }
           style={{ display: "none" }}
           onChange={(e) => {
             if (e.target.files && e.target.files.length > 0) {
@@ -422,74 +514,44 @@ export function AdminUploadZone({ folderId, onUploadSuccess }: AdminUploadZonePr
               fontWeight: 600,
             }}
           >
-            Max 70 MB
+            Max {formatBytes(dynamicMaxSize)}
           </span>
-          <span
-            style={{
-              fontSize: "11px",
-              padding: "2px 8px",
-              borderRadius: "var(--radius-sm)",
-              backgroundColor: "var(--bg-input)",
-              color: "var(--text-secondary)",
-            }}
-          >
-            PDF
-          </span>
-          <span
-            style={{
-              fontSize: "11px",
-              padding: "2px 8px",
-              borderRadius: "var(--radius-sm)",
-              backgroundColor: "var(--bg-input)",
-              color: "var(--text-secondary)",
-            }}
-          >
-            DOC / DOCX
-          </span>
-          <span
-            style={{
-              fontSize: "11px",
-              padding: "2px 8px",
-              borderRadius: "var(--radius-sm)",
-              backgroundColor: "var(--bg-input)",
-              color: "var(--text-secondary)",
-            }}
-          >
-            PPT / PPTX
-          </span>
-          <span
-            style={{
-              fontSize: "11px",
-              padding: "2px 8px",
-              borderRadius: "var(--radius-sm)",
-              backgroundColor: "var(--bg-input)",
-              color: "var(--text-secondary)",
-            }}
-          >
-            XLS / XLSX
-          </span>
-          <span
-            style={{
-              fontSize: "11px",
-              padding: "2px 8px",
-              borderRadius: "var(--radius-sm)",
-              backgroundColor: "var(--bg-input)",
-              color: "var(--text-secondary)",
-            }}
-          >
-            TXT / CSV
-          </span>
-          <span
-            style={{
-              fontSize: "11px",
-              padding: "2px 8px",
-              borderRadius: "var(--radius-sm)",
-              backgroundColor: "var(--bg-input)",
-              color: "var(--text-secondary)",
-            }}
-          >
-            JPG / PNG / WEBP / GIF
-          </span>
+          {(() => {
+            const allowed = Array.isArray(dynamicAllowed)
+              ? dynamicAllowed
+              : normalizeAllowedExtensions(dynamicAllowed);
+            if (allowed === "*") {
+              return (
+                <span
+                  style={{
+                    fontSize: "11px",
+                    padding: "2px 8px",
+                    borderRadius: "var(--radius-sm)",
+                    backgroundColor: "rgba(16, 185, 129, 0.12)",
+                    color: "#10b981",
+                    fontWeight: 600,
+                  }}
+                >
+                  All Formats Allowed (*)
+                </span>
+              );
+            }
+            return (allowed as string[]).slice(0, 8).map((extItem: string) => (
+              <span
+                key={extItem}
+                style={{
+                  fontSize: "11px",
+                  padding: "2px 8px",
+                  borderRadius: "var(--radius-sm)",
+                  backgroundColor: "var(--bg-input)",
+                  color: "var(--text-secondary)",
+                  textTransform: "uppercase",
+                }}
+              >
+                {extItem}
+              </span>
+            ));
+          })()}
         </div>
       </div>
 

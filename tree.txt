@@ -1,0 +1,344 @@
+├── .env.example
+├── .env.local
+├── .gitignore
+├── AGENTS.md
+├── app
+│   ├── (auth)
+│   │   ├── forgot-password
+│   │   │   └── page.tsx
+│   │   ├── layout.tsx
+│   │   ├── login
+│   │   │   └── page.tsx
+│   │   ├── reset-password
+│   │   │   └── page.tsx
+│   │   └── signup
+│   │       └── page.tsx
+│   ├── about
+│   │   └── page.tsx
+│   ├── actions
+│   │   └── auth.ts
+│   ├── admin
+│   │   ├── AdminDashboardClient.tsx
+│   │   ├── files
+│   │   │   └── page.tsx
+│   │   ├── folders
+│   │   │   └── page.tsx
+│   │   ├── page.tsx
+│   │   ├── settings
+│   │   │   └── page.tsx
+│   │   ├── storage
+│   │   │   └── page.tsx
+│   │   └── users
+│   │       └── page.tsx
+│   ├── api
+│   │   ├── admin
+│   │   │   ├── cleanup
+│   │   │   │   └── route.ts
+│   │   │   ├── overview
+│   │   │   │   └── route.ts
+│   │   │   ├── settings
+│   │   │   │   └── route.ts
+│   │   │   ├── storage
+│   │   │   │   └── route.ts
+│   │   │   └── users
+│   │   │       ├── route.ts
+│   │   │       └── [id]
+│   │   │           └── route.ts
+│   │   ├── auth
+│   │   │   └── callback
+│   │   │       └── route.ts
+│   │   ├── bookmarks
+│   │   │   └── route.ts
+│   │   ├── feed
+│   │   │   └── recent
+│   │   │       └── route.ts
+│   │   ├── files
+│   │   │   ├── route.ts
+│   │   │   ├── upload
+│   │   │   │   └── route.ts
+│   │   │   └── [id]
+│   │   │       ├── download
+│   │   │       │   └── route.ts
+│   │   │       ├── permanent
+│   │   │       │   └── route.ts
+│   │   │       ├── preview
+│   │   │       │   └── route.ts
+│   │   │       ├── related
+│   │   │       │   └── route.ts
+│   │   │       ├── restore
+│   │   │       │   └── route.ts
+│   │   │       ├── route.ts
+│   │   │       ├── zip-extract
+│   │   │       │   └── route.ts
+│   │   │       └── zip-tree
+│   │   │           └── route.ts
+│   │   ├── folders
+│   │   │   ├── route.ts
+│   │   │   └── [id]
+│   │   │       ├── permanent
+│   │   │       │   └── route.ts
+│   │   │       ├── restore
+│   │   │       │   └── route.ts
+│   │   │       └── route.ts
+│   │   ├── health
+│   │   │   └── route.ts
+│   │   ├── maintenance
+│   │   │   └── status
+│   │   │       └── route.ts
+│   │   ├── posts
+│   │   │   ├── route.ts
+│   │   │   └── [id]
+│   │   │       ├── attachments
+│   │   │       │   ├── route.ts
+│   │   │       │   └── [fileId]
+│   │   │       │       └── route.ts
+│   │   │       ├── permanent
+│   │   │       │   └── route.ts
+│   │   │       ├── related
+│   │   │       │   └── route.ts
+│   │   │       ├── restore
+│   │   │       │   └── route.ts
+│   │   │       ├── route.ts
+│   │   │       └── versions
+│   │   │           ├── route.ts
+│   │   │           └── [versionId]
+│   │   │               └── restore
+│   │   │                   └── route.ts
+│   │   ├── search
+│   │   │   └── route.ts
+│   │   ├── storage
+│   │   │   └── batch
+│   │   │       └── route.ts
+│   │   └── trash
+│   │       ├── cleanup
+│   │       │   └── route.ts
+│   │       └── route.ts
+│   ├── audit-logs
+│   │   ├── AuditLogViewer.tsx
+│   │   └── page.tsx
+│   ├── files
+│   │   └── page.tsx
+│   ├── globals.css
+│   ├── layout.tsx
+│   ├── maintenance
+│   │   └── page.tsx
+│   ├── page.tsx
+│   ├── posts
+│   │   └── page.tsx
+│   ├── privacy
+│   │   └── page.tsx
+│   ├── recent
+│   │   └── page.tsx
+│   ├── settings
+│   │   └── page.tsx
+│   └── terms
+│       └── page.tsx
+├── CLAUDE.md
+├── components
+│   ├── admin
+│   │   ├── AdminSettingsClient.tsx
+│   │   ├── AdminStorageClient.tsx
+│   │   └── AdminUsersClient.tsx
+│   ├── auth
+│   │   └── AuthGuard.tsx
+│   ├── bookmarks
+│   │   ├── BookmarkButton.tsx
+│   │   └── BookmarksPanel.tsx
+│   ├── feed
+│   │   └── ActivityFeed.tsx
+│   ├── layout
+│   │   ├── LayoutShell.tsx
+│   │   ├── MobileNav.tsx
+│   │   ├── Sidebar.tsx
+│   │   ├── SmoothScrollProvider.tsx
+│   │   └── Topbar.tsx
+│   ├── posts
+│   │   ├── CodeSnippetViewer.tsx
+│   │   ├── FeaturedAnnouncement.tsx
+│   │   ├── MarkdownEditor.tsx
+│   │   ├── PostDetailModal.tsx
+│   │   ├── PostEditorModal.tsx
+│   │   ├── PostHistoryModal.tsx
+│   │   └── PostsManager.tsx
+│   ├── recent
+│   │   ├── RecentTray.tsx
+│   │   └── RecentTrayClient.tsx
+│   ├── search
+│   │   └── SearchModal.tsx
+│   ├── storage
+│   │   ├── ActionContextMenu.tsx
+│   │   ├── ActionModals.tsx
+│   │   ├── AdminUploadZone.tsx
+│   │   ├── Breadcrumbs.tsx
+│   │   ├── CodePreview.tsx
+│   │   ├── FilePreviewModal.tsx
+│   │   ├── FilesManager.tsx
+│   │   ├── FolderCard.tsx
+│   │   ├── ImageViewer.tsx
+│   │   ├── MediaPreview.tsx
+│   │   ├── OfficePreview.tsx
+│   │   ├── TrashView.tsx
+│   │   └── ZipExplorer.tsx
+│   └── ui
+│       ├── Badge.tsx
+│       ├── Button.tsx
+│       ├── Card.tsx
+│       └── ThemeToggle.tsx
+├── eslint.config.mjs
+├── FEATURES_PLAN.md
+├── jest.config.js
+├── lib
+│   ├── auth
+│   │   ├── roles.ts
+│   │   └── session.ts
+│   ├── client
+│   │   ├── fetch-dedup.ts
+│   │   └── recent.ts
+│   ├── feed
+│   │   └── recent.ts
+│   ├── logging
+│   │   ├── audit.ts
+│   │   ├── auth-audit.ts
+│   │   ├── file-audit.ts
+│   │   ├── index.ts
+│   │   ├── log-action.ts
+│   │   ├── logger.ts
+│   │   └── post-audit.ts
+│   ├── permissions
+│   │   ├── api-guard.ts
+│   │   ├── index.ts
+│   │   └── rbac.ts
+│   ├── posts
+│   │   ├── diff.ts
+│   │   └── markdown.ts
+│   ├── search
+│   │   └── operators.ts
+│   ├── security
+│   │   ├── rate-limit.ts
+│   │   └── sanitize.ts
+│   ├── settings
+│   │   └── system-settings.ts
+│   ├── storage
+│   │   ├── client.ts
+│   │   ├── file-validation.ts
+│   │   ├── files-server.ts
+│   │   ├── preview.ts
+│   │   ├── quotas.ts
+│   │   ├── trash.ts
+│   │   └── zip.ts
+│   ├── supabase
+│   │   ├── admin.ts
+│   │   ├── client.ts
+│   │   ├── middleware.ts
+│   │   └── server.ts
+│   └── validation
+│       ├── env.ts
+│       ├── schema.ts
+│       └── settings.ts
+├── next-env.d.ts
+├── next.config.ts
+├── package-lock.json
+├── package.json
+├── proxy.ts
+├── README.md
+├── scratch
+│   └── tree.js
+├── scripts
+│   ├── cleanup-retention.ts
+│   ├── seed-admin.ts
+│   ├── seed-day3.ts
+│   ├── verify-day3.ts
+│   ├── verify-day4.ts
+│   ├── verify-day5.ts
+│   ├── verify-day6.ts
+│   ├── verify-day7.ts
+│   ├── verify-day8.ts
+│   └── verify-day9.ts
+├── server
+│   ├── src
+│   │   ├── config
+│   │   │   ├── env.ts
+│   │   │   └── supabase.ts
+│   │   ├── middleware
+│   │   │   ├── auth.ts
+│   │   │   ├── error-handler.ts
+│   │   │   ├── maintenance.ts
+│   │   │   ├── rate-limiter.ts
+│   │   │   └── validate.ts
+│   │   ├── routes
+│   │   │   ├── admin
+│   │   │   │   ├── overview.routes.ts
+│   │   │   │   ├── settings.routes.ts
+│   │   │   │   ├── storage.routes.ts
+│   │   │   │   └── users.routes.ts
+│   │   │   ├── auth.routes.ts
+│   │   │   ├── feed.routes.ts
+│   │   │   ├── files.routes.ts
+│   │   │   ├── folders.routes.ts
+│   │   │   ├── health.routes.ts
+│   │   │   ├── posts.routes.ts
+│   │   │   ├── search.routes.ts
+│   │   │   └── trash.routes.ts
+│   │   ├── server.ts
+│   │   ├── services
+│   │   │   ├── audit.service.ts
+│   │   │   ├── feed.service.ts
+│   │   │   ├── security.service.ts
+│   │   │   ├── storage.service.ts
+│   │   │   └── trash.service.ts
+│   │   ├── types
+│   │   │   ├── express.d.ts
+│   │   │   └── index.ts
+│   │   └── utils
+│   │       └── helpers.ts
+│   └── tsconfig.json
+├── supabase
+│   ├── config.toml
+│   ├── migrations
+│   │   ├── 00001_initial_schema.sql
+│   │   ├── 00002_storage_setup.sql
+│   │   ├── 00003_auth_and_roles.sql
+│   │   ├── 00004_full_schema_and_rls.sql
+│   │   ├── 00005_dump_files_bucket.sql
+│   │   ├── 00006_audit_logs_hardening.sql
+│   │   ├── 00007_day10_optimizations_and_retention.sql
+│   │   └── 00008_ten_feature_evolution.sql
+│   ├── run_in_supabase_sql_editor.sql
+│   ├── seed.sql
+│   ├── seed_admin.sql
+│   └── seed_day3.sql
+├── tests
+│   └── unit
+│       ├── admin-settings.test.ts
+│       ├── admin-user-management.test.ts
+│       ├── audit-logging.test.ts
+│       ├── auth.test.ts
+│       ├── dashboard-navigation.test.ts
+│       ├── file-preview.test.ts
+│       ├── file-validation.test.ts
+│       ├── folder-hierarchy.test.ts
+│       ├── permission-matrix-full.test.ts
+│       ├── permissions.test.ts
+│       ├── posts-crud.test.ts
+│       ├── rate-limit.test.ts
+│       ├── rbac-rls.test.ts
+│       ├── retention-cleanup.test.ts
+│       ├── sanitization.test.ts
+│       ├── search-query.test.ts
+│       ├── security-idor.test.ts
+│       ├── storage-limits-thresholds.test.ts
+│       ├── ten-features.test.ts
+│       ├── trash-lifecycle.test.ts
+│       └── validation.test.ts
+├── tsconfig.json
+├── tsconfig.tsbuildinfo
+├── types
+│   ├── audit.ts
+│   ├── database.types.ts
+│   ├── feed.ts
+│   ├── post.ts
+│   ├── posts.ts
+│   ├── search.ts
+│   ├── storage.ts
+│   └── user.ts
+└── walkthrough.md

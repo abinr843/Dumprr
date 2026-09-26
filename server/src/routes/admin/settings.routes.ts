@@ -11,6 +11,7 @@ import { authenticateUser, requireAdmin } from "../../middleware/auth.js";
 import { logAction } from "../../services/audit.service.js";
 import { AUDIT_ACTIONS } from "../../types/index.js";
 import { asyncHandler } from "../../middleware/error-handler.js";
+import { humanizeTechnicalError } from "../../utils/api-response.js";
 import { invalidateMaintenanceCache } from "../../middleware/maintenance.js";
 
 const router = Router();
@@ -30,7 +31,7 @@ router.get(
       .order("key", { ascending: true });
 
     if (error) {
-      res.status(500).json({ error: `Failed to fetch settings: ${error.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(error, "Couldn't load settings. Please try again.") });
       return;
     }
 

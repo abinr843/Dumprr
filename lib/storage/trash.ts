@@ -1,16 +1,19 @@
 /**
  * Trash Lifecycle Utilities
  *
- * Manages 7-day trash retention window calculations
+ * Manages configurable trash retention window calculations
  * and expired-trash cleanup logic.
+ * Retention period is read from system_settings (storage.retention_days),
+ * defaulting to 7 days when the setting is unavailable.
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logFileEvent } from "@/lib/logging/file-audit";
 import { AUDIT_ACTIONS } from "@/types/audit";
 import { logger } from "@/lib/logging/logger";
+import { getRetentionDays } from "@/lib/settings/system-settings";
 
-const TRASH_RETENTION_DAYS = 7;
+const DEFAULT_TRASH_RETENTION_DAYS = 7;
 
 /** Result of calculating trash expiration for an item */
 export interface TrashExpiration {
@@ -22,13 +25,17 @@ export interface TrashExpiration {
 
 /**
  * Calculates the expiration countdown for a trashed item.
+ * @param retentionDays - override the setting; pass undefined to use the default constant (sync-safe).
+ *   Note: this function is synchronous, so it uses the static default.
+ *   For dynamic values, call getRetentionDays() before and pass the result.
  */
 export function calculateTrashExpiration(
-  deletedAt: string
+  deletedAt: string,
+  retentionDays: number = DEFAULT_TRASH_RETENTION_DAYS
 ): TrashExpiration {
   const deletedDate = new Date(deletedAt);
   const expiresDate = new Date(
-    deletedDate.getTime() + TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000
+    deletedDate.getTime() + retentionDays * 24 * 60 * 60 * 1000
   );
   const now = new Date();
   const msRemaining = expiresDate.getTime() - now.getTime();
@@ -52,11 +59,13 @@ export function calculateTrashExpiration(
  * @returns Count of items permanently removed.
  */
 export async function cleanupExpiredTrash(
-  daysThreshold: number = TRASH_RETENTION_DAYS
+  daysThreshold?: number
 ): Promise<{ filesRemoved: number; foldersRemoved: number; postsRemoved: number }> {
+  // Fetch dynamic retention from settings if not explicitly provided
+  const effectiveDays = daysThreshold ?? await getRetentionDays();
   const adminClient = createAdminClient();
   const cutoffDate = new Date(
-    Date.now() - daysThreshold * 24 * 60 * 60 * 1000
+    Date.now() - effectiveDays * 24 * 60 * 60 * 1000
   ).toISOString();
 
   let filesRemoved = 0;

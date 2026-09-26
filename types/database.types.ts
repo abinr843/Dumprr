@@ -9,6 +9,7 @@
 export type UserRole = "superadmin" | "admin" | "member" | "viewer";
 export type PostStatus = "draft" | "published" | "archived" | "trash" | "deleted";
 export type ContentStatus = "active" | "trash" | "deleted";
+export type PostType = "article" | "code";
 
 export interface Database {
   public: {
@@ -163,6 +164,11 @@ export interface Database {
           status: PostStatus;
           featured_image_url: string;
           tags: string[];
+          post_type: PostType;
+          code_language: string | null;
+          code_filename: string | null;
+          is_pinned: boolean;
+          pinned_at: string | null;
           published_at: string | null;
           deleted_at: string | null;
           created_at: string;
@@ -178,6 +184,11 @@ export interface Database {
           status?: PostStatus;
           featured_image_url?: string;
           tags?: string[];
+          post_type?: PostType;
+          code_language?: string | null;
+          code_filename?: string | null;
+          is_pinned?: boolean;
+          pinned_at?: string | null;
           published_at?: string | null;
           deleted_at?: string | null;
           created_at?: string;
@@ -191,10 +202,86 @@ export interface Database {
           status?: PostStatus;
           featured_image_url?: string;
           tags?: string[];
+          post_type?: PostType;
+          code_language?: string | null;
+          code_filename?: string | null;
+          is_pinned?: boolean;
+          pinned_at?: string | null;
           published_at?: string | null;
           deleted_at?: string | null;
           updated_at?: string;
         };
+        Relationships: [];
+      };
+      post_attachments: {
+        Row: {
+          id: string;
+          post_id: string;
+          file_id: string;
+          display_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          post_id: string;
+          file_id: string;
+          display_order?: number;
+        };
+        Update: {
+          display_order?: number;
+        };
+        Relationships: [];
+      };
+      post_versions: {
+        Row: {
+          id: string;
+          post_id: string;
+          version_number: number;
+          title: string;
+          content: string | null;
+          excerpt: string | null;
+          tags: string[] | null;
+          post_type: string | null;
+          code_language: string | null;
+          code_filename: string | null;
+          author_id: string | null;
+          change_summary: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          post_id: string;
+          version_number: number;
+          title: string;
+          content?: string | null;
+          excerpt?: string | null;
+          tags?: string[] | null;
+          post_type?: string | null;
+          code_language?: string | null;
+          code_filename?: string | null;
+          author_id?: string | null;
+          change_summary?: string | null;
+        };
+        Update: {
+          change_summary?: string | null;
+        };
+        Relationships: [];
+      };
+      user_bookmarks: {
+        Row: {
+          id: string;
+          user_id: string;
+          item_type: "file" | "post";
+          item_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          item_type: "file" | "post";
+          item_id: string;
+        };
+        Update: Record<string, never>;
         Relationships: [];
       };
       audit_logs: {

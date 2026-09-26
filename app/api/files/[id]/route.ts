@@ -1,4 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, badRequest, notFound, fail, validationFailed, conflict } from "@/lib/api/response";
+import {
+  humanizeTechnicalError,
+  humanizeZodDetails,
+} from "@/lib/api/human-errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth/session";
 import { isAdmin } from "@/lib/auth/roles";
@@ -40,13 +45,10 @@ export async function GET(req: NextRequest, context: RouteContext) {
   const { data: file, error } = await query.single();
 
   if (error || !file) {
-    return NextResponse.json(
-      { error: "File not found" },
-      { status: 404 }
-    );
+    return notFound("This file is no longer available. It may have been moved or deleted.");
   }
 
-  return NextResponse.json({ file });
+  return ok({ file });
 }
 
 /**
@@ -62,9 +64,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const parsed = fileUpdateSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Validation failed", details: parsed.error.flatten() },
-      { status: 400 }
+    return validationFailed(
+      humanizeZodDetails(parsed.error.flatten()),
+      parsed.error.flatten()
     );
   }
 
@@ -90,7 +92,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       user_agent: userAgent,
       metadata: { reason: "File not found for update" },
     });
-    return NextResponse.json({ error: "File not found" }, { status: 404 });
+    return notFound("This file no longer exists.");
   }
 
   const updates: FileUpdate = { updated_at: new Date().toISOString() };
@@ -118,10 +120,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         .single();
 
       if (!targetFolder) {
-        return NextResponse.json(
-          { error: "Target folder not found or is not active" },
-          { status: 400 }
-        );
+        return badRequest("The folder you're moving this to no longer exists. Please choose another.");
       }
     }
 
@@ -136,7 +135,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
 
   if (Object.keys(updates).length <= 1) {
-    return NextResponse.json({ file: existing, message: "No changes" });
+    return ok({ file: existing, message: "No changes" });
   }
 
   const { data: updated, error: updateErr } = await adminClient
@@ -158,9 +157,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       user_agent: userAgent,
       metadata: { error: updateErr.message },
     });
-    return NextResponse.json(
-      { error: `Update failed: ${updateErr.message}` },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(updateErr, "Couldn't update this file. Please try again."),
+      500
     );
   }
 
@@ -179,7 +179,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     });
   }
 
-  return NextResponse.json({ file: updated });
+  return ok({ file: updated });
 }
 
 /**
@@ -211,14 +211,11 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       user_agent: userAgent,
       metadata: { reason: "File not found" },
     });
-    return NextResponse.json({ error: "File not found" }, { status: 404 });
+    return notFound("This file no longer exists.");
   }
 
   if (existing.status === "trash") {
-    return NextResponse.json(
-      { error: "File is already in trash" },
-      { status: 409 }
-    );
+    return conflict("This file is already in trash.");
   }
 
   const { data: updated, error: updateErr } = await adminClient
@@ -244,9 +241,10 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       user_agent: userAgent,
       metadata: { error: updateErr.message },
     });
-    return NextResponse.json(
-      { error: `Soft delete failed: ${updateErr.message}` },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(updateErr, "Couldn't move this file to trash. Please try again."),
+      500
     );
   }
 
@@ -261,5 +259,5 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     user_agent: userAgent,
   });
 
-  return NextResponse.json({ file: updated, message: "File moved to trash" });
+  return ok({ file: updated, message: "File moved to trash" });
 }

@@ -101,9 +101,15 @@ export const postCreateSchema = z.object({
   status: postStatusSchema.optional().default("draft"),
   featured_image_url: z.string().url().optional().or(z.literal("")),
   tags: z.array(z.string().max(50)).max(20, "Too many tags").optional(),
+  post_type: z.enum(["article", "code"]).optional().default("article"),
+  code_language: z.string().max(30).optional().nullable(),
+  code_filename: z.string().max(255).optional().nullable(),
+  is_pinned: z.boolean().optional().default(false),
 });
 
-export const postUpdateSchema = postCreateSchema.partial();
+export const postUpdateSchema = postCreateSchema.partial().extend({
+  change_summary: z.string().max(280).optional(),
+});
 
 // ---- Search ----
 export const searchQuerySchema = z.object({

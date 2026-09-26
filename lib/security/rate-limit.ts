@@ -199,8 +199,9 @@ export async function rateLimitResponse(
 
   return NextResponse.json(
     {
-      error: "Too Many Requests",
-      message: `Rate limit exceeded for ${config.label.toLowerCase()}. Try again in ${result.retryAfter} second(s).`,
+      success: false,
+      error: `You're doing that too often. Please wait ${result.retryAfter} second(s) and try again.`,
+      code: "RATE_LIMITED",
       retryAfter: result.retryAfter,
     },
     {

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok } from "@/lib/api/response";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   authenticateAdminApi,
@@ -71,7 +72,7 @@ export async function GET(req: NextRequest) {
       new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()
   );
 
-  return NextResponse.json({ items, total: items.length });
+  return ok({ items, total: items.length });
 }
 
 /**
@@ -133,7 +134,7 @@ export async function DELETE(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({
+  return ok({
     message: "Trash emptied",
     filesDeleted,
     foldersDeleted,

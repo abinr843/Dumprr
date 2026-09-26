@@ -1,43 +1,31 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { createClient } from "@supabase/supabase-js";
+import { getMaintenanceMode, getPublicBrowsingAllowed } from "@/lib/settings/system-settings";
 
-// ─── Maintenance Mode Cache (30-second TTL) ──────────────────────────
-// Checks status every 30 seconds while avoiding remote DB calls on every request.
-let maintenanceCache: { value: boolean; expiresAt: number } | null = null;
+// ─── Maintenance Mode Cache ──────────────────────────────────────────
+// Delegated to the centralized settings service (lib/settings/system-settings.ts)
+// which uses a 15-second in-memory TTL cache.
 
 /**
  * Invalidate the in-memory maintenance cache.
  * Called by the admin settings API when app.maintenance_mode is updated.
+ * Now delegates to the centralized settings cache invalidation.
  */
 export function invalidateMaintenanceCache(): void {
-  maintenanceCache = null;
+  // Import dynamically to avoid circular deps in edge cases
+  const { invalidateSettingsCache } = require("@/lib/settings/system-settings");
+  invalidateSettingsCache();
 }
 
+/**
+ * Check maintenance mode status.
+ * @param skipCache - if true, forces a fresh DB fetch by invalidating cache first
+ */
 async function isMaintenanceMode(skipCache = false): Promise<boolean> {
-  const now = Date.now();
-  if (!skipCache && maintenanceCache && maintenanceCache.expiresAt > now) {
-    return maintenanceCache.value;
+  if (skipCache) {
+    invalidateMaintenanceCache();
   }
-
-  try {
-    const admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-    const { data } = await admin
-      .from("system_settings")
-      .select("value")
-      .eq("key", "app.maintenance_mode")
-      .single();
-
-    const enabled = data?.value === "true" || data?.value === true;
-    maintenanceCache = { value: enabled, expiresAt: now + 30_000 };
-    return enabled;
-  } catch {
-    // If we can't check, assume not in maintenance
-    return false;
-  }
+  return getMaintenanceMode();
 }
 
 /**
@@ -186,7 +174,34 @@ export async function proxy(request: NextRequest) {
   const needsAuthCheck = isAdminPath || isLoginPath || (!isPurelyPublic && !isPublicApiRoute && !pathname.startsWith("/api/"));
 
   if (!needsAuthCheck) {
-    // Public route — pass through without auth network call
+    // Public route — check if public browsing is allowed
+    const publicBrowsingAllowed = await getPublicBrowsingAllowed();
+    if (!publicBrowsingAllowed && !isLoginPath) {
+      // Public browsing disabled — redirect unauthenticated visitors to login
+      // We need a lightweight session check here
+      try {
+        const checkSupabase = createServerClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          {
+            cookies: {
+              getAll() {
+                return request.cookies.getAll();
+              },
+              setAll() {},
+            },
+          }
+        );
+        const { data: { user: checkUser } } = await checkSupabase.auth.getUser();
+        if (!checkUser) {
+          const loginUrl = new URL("/login", request.url);
+          loginUrl.searchParams.set("redirectTo", pathname);
+          return NextResponse.redirect(loginUrl);
+        }
+      } catch {
+        // If auth check fails, let the request through
+      }
+    }
     return NextResponse.next({ request });
   }
 

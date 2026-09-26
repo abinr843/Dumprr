@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, fail } from "@/lib/api/response";
+import { humanizeTechnicalError } from "@/lib/api/human-errors";
 import { authenticateAdminApi, getRequestContext } from "@/lib/permissions/api-guard";
 import { cleanupExpiredTrash } from "@/lib/storage/trash";
 import { logAction } from "@/lib/logging/log-action";
@@ -43,14 +45,15 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({
+    return ok({
       message: "Cleanup completed successfully",
       ...result,
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Cleanup failed" },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(err, "Cleanup couldn't finish. Please try again."),
+      500
     );
   }
 }

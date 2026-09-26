@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ok, badRequest, notFound, fail } from "@/lib/api/response";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AUDIT_ACTIONS } from "@/types/audit";
 import { logAction } from "@/lib/logging/log-action";
@@ -18,7 +19,7 @@ interface RouteParams {
 export async function GET(req: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   if (!id) {
-    return NextResponse.json({ error: "File ID is required" }, { status: 400 });
+    return badRequest("We couldn't tell which file to download. Please try again.");
   }
 
   const ipAddress =
@@ -48,12 +49,10 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       maintenanceSetting?.value === "true" || maintenanceSetting?.value === true;
 
     if (isMaintenanceOn) {
-      return NextResponse.json(
-        {
-          error: "Downloads are temporarily disabled during maintenance mode.",
-          maintenance: true,
-        },
-        { status: 503 }
+      return fail(
+        "MAINTENANCE",
+        "Downloads are paused while the site is under maintenance. Please try again later.",
+        503
       );
     }
   } catch {
@@ -81,10 +80,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       user_agent: userAgent,
       metadata: { reason: "File not found, inactive, or deleted" },
     });
-    return NextResponse.json(
-      { error: "File not found or no longer available" },
-      { status: 404 }
-    );
+    return notFound("This file is no longer available. It may have been moved or deleted.");
   }
 
   // 2. Increment download counter
@@ -131,16 +127,17 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       user_agent: userAgent,
       metadata: { reason: "Failed to generate signed download URL" },
     });
-    return NextResponse.json(
-      { error: "Failed to generate download URL" },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      "We couldn't prepare your download. Please try again in a moment.",
+      500
     );
   }
 
   // Check if client expects JSON
   const acceptHeader = req.headers.get("accept") || "";
   if (acceptHeader.includes("application/json")) {
-    return NextResponse.json({
+    return ok({
       downloadUrl: signedUrlData.signedUrl,
       fileName: file.original_name || file.name,
       sizeBytes: file.size_bytes,

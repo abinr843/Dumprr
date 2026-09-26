@@ -1,13 +1,40 @@
 /**
  * Trash retention service for the Express backend.
  *
- * Ported from lib/storage/trash.ts — handles the 7-day retention
- * lifecycle for soft-deleted files, folders, and posts.
+ * Fetches retention_days from system_settings dynamically,
+ * falling back to 7 days when the setting is unavailable.
  */
 
 import { createAdminClient } from "../config/supabase.js";
 
-const RETENTION_DAYS = 7;
+const DEFAULT_RETENTION_DAYS = 7;
+
+// ─── Settings Cache (15s TTL) ───────────────────────────────────────
+let retentionCache: { value: number; expiresAt: number } | null = null;
+
+async function getRetentionDays(): Promise<number> {
+  const now = Date.now();
+  if (retentionCache && retentionCache.expiresAt > now) {
+    return retentionCache.value;
+  }
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("system_settings")
+      .select("value")
+      .eq("key", "storage.retention_days")
+      .single();
+    let val = data?.value;
+    if (typeof val === "string") {
+      try { val = JSON.parse(val); } catch { /* keep as-is */ }
+    }
+    const days = typeof val === "number" && val > 0 ? val : DEFAULT_RETENTION_DAYS;
+    retentionCache = { value: days, expiresAt: now + 15_000 };
+    return days;
+  } catch {
+    return DEFAULT_RETENTION_DAYS;
+  }
+}
 
 export interface CleanupResult {
   filesRemoved: number;
@@ -18,32 +45,35 @@ export interface CleanupResult {
 /**
  * Calculates the expiration date for a trashed item.
  * Returns the date string when the item should be permanently deleted.
+ * @param retentionDays - override; pass undefined to use the default constant (sync-safe).
  */
-export function getExpirationDate(deletedAt: string): string {
+export function getExpirationDate(deletedAt: string, retentionDays: number = DEFAULT_RETENTION_DAYS): string {
   const date = new Date(deletedAt);
-  date.setDate(date.getDate() + RETENTION_DAYS);
+  date.setDate(date.getDate() + retentionDays);
   return date.toISOString();
 }
 
 /**
  * Calculates remaining days until permanent deletion.
+ * @param retentionDays - override; pass undefined to use the default constant (sync-safe).
  */
-export function getRemainingDays(deletedAt: string): number {
+export function getRemainingDays(deletedAt: string, retentionDays: number = DEFAULT_RETENTION_DAYS): number {
   const expiresAt = new Date(deletedAt);
-  expiresAt.setDate(expiresAt.getDate() + RETENTION_DAYS);
+  expiresAt.setDate(expiresAt.getDate() + retentionDays);
   const now = new Date();
   const diffMs = expiresAt.getTime() - now.getTime();
   return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 }
 
 /**
- * Purges all items that have been in trash for longer than 7 days.
+ * Purges all items that have been in trash for longer than the configured retention period.
  * Removes physical storage objects and database rows.
  */
 export async function cleanupExpiredTrash(): Promise<CleanupResult> {
+  const retentionDays = await getRetentionDays();
   const admin = createAdminClient();
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - RETENTION_DAYS);
+  cutoff.setDate(cutoff.getDate() - retentionDays);
   const cutoffISO = cutoff.toISOString();
 
   let filesRemoved = 0;
@@ -102,4 +132,4 @@ export async function cleanupExpiredTrash(): Promise<CleanupResult> {
   return { filesRemoved, foldersRemoved, postsRemoved };
 }
 
-export { RETENTION_DAYS };
+export { DEFAULT_RETENTION_DAYS, getRetentionDays };

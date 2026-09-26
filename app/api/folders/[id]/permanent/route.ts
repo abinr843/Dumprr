@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, notFound } from "@/lib/api/response";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   authenticateAdminApi,
@@ -35,7 +36,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     .single();
 
   if (fetchErr || !existing) {
-    return NextResponse.json({ error: "Folder not found" }, { status: 404 });
+    return notFound("This folder no longer exists.");
   }
 
   // Collect all descendant folder IDs
@@ -99,7 +100,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     },
   });
 
-  return NextResponse.json({
+  return ok({
     message: "Folder and all contents permanently deleted",
     foldersDeleted: allFolderIds.length,
     filesDeleted: filesToDelete?.length ?? 0,

@@ -1,6 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import "./globals.css";
+import {
+  getSiteName,
+  getSiteDescription,
+  getDefaultTheme,
+} from "@/lib/settings/system-settings";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -13,22 +18,48 @@ export const viewport: Viewport = {
   ],
 };
 
-export const metadata: Metadata = {
-  title: "DUMPR — File Management & Content Platform",
-  description:
-    "A premium file management and content publishing platform with secure storage, role-based access, and audit compliance.",
-  keywords: ["file management", "storage", "content platform", "DUMPR"],
-};
+/**
+ * Dynamic metadata — reads site name and description from system_settings.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  let siteName = "DUMPR";
+  let description =
+    "A premium file management and content publishing platform with secure storage, role-based access, and audit compliance.";
 
-export default function RootLayout({
+  try {
+    siteName = await getSiteName();
+    description = await getSiteDescription();
+  } catch {
+    // Fallback to defaults if settings service unavailable
+  }
+
+  return {
+    title: `${siteName} — File Management & Content Platform`,
+    description,
+    keywords: ["file management", "storage", "content platform", siteName],
+  };
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Fetch the default theme from settings for SSR
+  let defaultTheme = "dark";
+  try {
+    const themeSetting = await getDefaultTheme();
+    if (themeSetting === "light" || themeSetting === "dark") {
+      defaultTheme = themeSetting;
+    }
+  } catch {
+    // Use 'dark' fallback
+  }
+
   return (
     <html
       lang="en"
-      data-theme="dark"
+      data-theme={defaultTheme}
       data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
@@ -49,8 +80,15 @@ export default function RootLayout({
               (function() {
                 try {
                   var theme = localStorage.getItem('dumpr-theme');
-                  // Default to dark if no preference stored
-                  document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
+                  var defaultTheme = '${defaultTheme}';
+                  if (theme === 'light' || theme === 'dark') {
+                    document.documentElement.setAttribute('data-theme', theme);
+                  } else if (defaultTheme === 'system') {
+                    var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+                  } else {
+                    document.documentElement.setAttribute('data-theme', defaultTheme);
+                  }
                 } catch (e) {
                   document.documentElement.setAttribute('data-theme', 'dark');
                 }
@@ -63,4 +101,3 @@ export default function RootLayout({
     </html>
   );
 }
-

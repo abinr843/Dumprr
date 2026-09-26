@@ -14,15 +14,27 @@ export const metadata = {
 export default async function PostsPage() {
   const adminClient = createAdminClient();
 
-  // Parallelize session + initial published posts fetch
+  // Parallelize session + initial published posts fetch (pinned first, Feature 10)
   const [session, postsResult] = await Promise.all([
     getSession(),
-    adminClient
-      .from("posts")
-      .select("*, profiles:author_id(id, username, full_name, avatar_url)")
-      .eq("status", "published")
-      .is("deleted_at", null)
-      .order("published_at", { ascending: false, nullsFirst: false }),
+    (async () => {
+      const primary = await adminClient
+        .from("posts")
+        .select("*, profiles:author_id(id, username, full_name, avatar_url)")
+        .eq("status", "published")
+        .is("deleted_at", null)
+        .order("is_pinned" as never, { ascending: false } as never)
+        .order("pinned_at" as never, { ascending: false, nullsFirst: false } as never)
+        .order("published_at", { ascending: false, nullsFirst: false });
+      if (!primary.error) return primary;
+      // Pre-migration fallback (no pin columns yet)
+      return adminClient
+        .from("posts")
+        .select("*, profiles:author_id(id, username, full_name, avatar_url)")
+        .eq("status", "published")
+        .is("deleted_at", null)
+        .order("published_at", { ascending: false, nullsFirst: false });
+    })(),
   ]);
 
   const userIsAdmin = session?.profile

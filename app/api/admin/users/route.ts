@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, badRequest, fail } from "@/lib/api/response";
+import { humanizeTechnicalError } from "@/lib/api/human-errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   authenticateAdminApi,
@@ -7,29 +9,14 @@ import {
 import { logAction } from "@/lib/logging/log-action";
 import { AUDIT_ACTIONS } from "@/types/audit";
 import type { UserRole } from "@/types/database.types";
+import {
+  getMaxUsers as getMaxUsersFromSettings,
+  getDefaultUserRole,
+  getDefaultQuotaBytes,
+} from "@/lib/settings/system-settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/** Default maximum users (overridden by system_settings) */
-const DEFAULT_MAX_USERS = 20;
-
-/**
- * Fetch the max users cap from system_settings or fallback to default.
- */
-async function getMaxUsers(): Promise<number> {
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("system_settings")
-    .select("value")
-    .eq("key", "app.max_users")
-    .single();
-  if (data?.value) {
-    const parsed = parseInt(String(data.value), 10);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
-  }
-  return DEFAULT_MAX_USERS;
-}
 
 /**
  * GET /api/admin/users
@@ -47,9 +34,10 @@ export async function GET(req: NextRequest) {
       await admin.auth.admin.listUsers({ perPage: 1000 });
 
     if (authError) {
-      return NextResponse.json(
-        { error: `Failed to list users: ${authError.message}` },
-        { status: 500 }
+      return fail(
+        "INTERNAL_ERROR",
+        humanizeTechnicalError(authError, "Couldn't load users. Please try again."),
+        500
       );
     }
 
@@ -63,7 +51,7 @@ export async function GET(req: NextRequest) {
       (profiles || []).map((p) => [p.id, p])
     );
 
-    const maxUsers = await getMaxUsers();
+    const maxUsers = await getMaxUsersFromSettings();
 
     const users = (authData?.users || []).map((u) => {
       const profile = profileMap.get(u.id);
@@ -83,15 +71,16 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({
+    return ok({
       users,
       total: users.length,
       maxUsers,
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to list users" },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(err, "Couldn't load users. Please try again."),
+      500
     );
   }
 }
@@ -115,10 +104,7 @@ export async function POST(req: NextRequest) {
   };
 
   if (!email || !password) {
-    return NextResponse.json(
-      { error: "Email and password are required" },
-      { status: 400 }
-    );
+    return badRequest("Please provide both an email address and a password.");
   }
 
   // Block admin/superadmin role creation
@@ -133,16 +119,13 @@ export async function POST(req: NextRequest) {
       user_agent: userAgent,
       metadata: { reason: "Attempted to create a second administrator", requestedRole: role },
     });
-    return NextResponse.json(
-      { error: "Cannot create additional administrator accounts. Only member and viewer roles are permitted." },
-      { status: 400 }
-    );
+    return badRequest("New administrator accounts can't be created here. Only member and viewer roles are allowed.");
   }
 
   const admin = createAdminClient();
 
   // Enforce MAX_USERS cap
-  const maxUsers = await getMaxUsers();
+  const maxUsers = await getMaxUsersFromSettings();
   const { data: authData } = await admin.auth.admin.listUsers({ perPage: 1000 });
   const currentCount = authData?.users?.length ?? 0;
 
@@ -157,14 +140,15 @@ export async function POST(req: NextRequest) {
       user_agent: userAgent,
       metadata: { reason: "MAX_USERS cap reached", currentCount, maxUsers },
     });
-    return NextResponse.json(
-      { error: `User limit reached. Maximum ${maxUsers} users allowed. Current: ${currentCount}.` },
-      { status: 400 }
+    return badRequest(
+      `The user limit has been reached (${currentCount} of ${maxUsers}). Please remove someone or raise the limit first.`
     );
   }
 
   // Create user in Supabase Auth
-  const effectiveRole = (role === "member" || role === "viewer") ? role : "member";
+  const settingsDefaultRole = await getDefaultUserRole();
+  const effectiveRole = (role === "member" || role === "viewer") ? role : settingsDefaultRole;
+  const defaultQuota = await getDefaultQuotaBytes();
   const { data: newUser, error: createError } = await admin.auth.admin.createUser({
     email,
     password,
@@ -176,18 +160,20 @@ export async function POST(req: NextRequest) {
   });
 
   if (createError) {
-    return NextResponse.json(
-      { error: `Failed to create user: ${createError.message}` },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(createError, "Couldn't create that user. Please check the email and try again."),
+      500
     );
   }
 
-  // Ensure profile row with correct role
+  // Ensure profile row with correct role and quota
   const { error: profileError } = await admin.from("profiles").upsert({
     id: newUser.user.id,
     username: email.split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, "_"),
     full_name: full_name || email.split("@")[0],
     role: effectiveRole as UserRole,
+    storage_quota_bytes: defaultQuota,
   });
 
   if (profileError) {
@@ -207,7 +193,7 @@ export async function POST(req: NextRequest) {
     metadata: { role: effectiveRole, full_name },
   });
 
-  return NextResponse.json(
+  return ok(
     {
       user: {
         id: newUser.user.id,

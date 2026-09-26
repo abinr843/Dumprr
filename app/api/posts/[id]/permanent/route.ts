@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, notFound, fail } from "@/lib/api/response";
+import { humanizeTechnicalError } from "@/lib/api/human-errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   authenticateAdminApi,
@@ -47,7 +49,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       user_agent: userAgent,
       metadata: { reason: "Post not found" },
     });
-    return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    return notFound("This post no longer exists.");
   }
 
   const { error: deleteErr } = await adminClient
@@ -67,9 +69,10 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       user_agent: userAgent,
       metadata: { error: deleteErr.message },
     });
-    return NextResponse.json(
-      { error: `Permanent deletion failed: ${deleteErr.message}` },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(deleteErr, "Couldn't permanently delete this post. Please try again."),
+      500
     );
   }
 
@@ -87,7 +90,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     },
   });
 
-  return NextResponse.json({
+  return ok({
     message: "Post permanently deleted",
     id: post.id,
   });

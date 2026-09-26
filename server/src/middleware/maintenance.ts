@@ -1,15 +1,14 @@
 /**
  * Maintenance mode middleware for the Express backend.
  *
- * Checks system_settings with a 3-second in-memory cache.
- * The short TTL ensures admin toggles propagate near-instantly
- * while still avoiding a remote DB call on every single request.
+ * Checks system_settings with a 15-second in-memory cache.
+ * Consistent with the Next.js centralized settings service TTL.
  */
 
 import type { Request, Response, NextFunction } from "express";
 import { createAdminClient } from "../config/supabase.js";
 
-// ─── 3-second cache ─────────────────────────────────────────────────
+// ─── 15-second cache ────────────────────────────────────────────────
 
 let maintenanceCache: { value: boolean; expiresAt: number } | null = null;
 
@@ -35,13 +34,19 @@ async function isMaintenanceMode(): Promise<boolean> {
       .eq("key", "app.maintenance_mode")
       .single();
 
-    const enabled = data?.value === "true" || data?.value === true;
-    maintenanceCache = { value: enabled, expiresAt: now + 3_000 };
+    // Normalize JSONB: could be true, "true", or '"true"'
+    let val = data?.value;
+    if (typeof val === "string") {
+      try { val = JSON.parse(val); } catch { /* keep as-is */ }
+    }
+    const enabled = val === true || val === "true";
+    maintenanceCache = { value: enabled, expiresAt: now + 15_000 };
     return enabled;
   } catch {
     return false;
   }
 }
+
 
 // ─── Exempt paths ───────────────────────────────────────────────────
 

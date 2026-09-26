@@ -1,4 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, badRequest, notFound, fail, validationFailed } from "@/lib/api/response";
+import {
+  humanizeTechnicalError,
+  humanizeZodDetails,
+} from "@/lib/api/human-errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth/session";
 import { isAdmin } from "@/lib/auth/roles";
@@ -26,7 +31,7 @@ interface RouteParams {
 export async function GET(req: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   if (!id) {
-    return NextResponse.json({ error: "Post ID is required" }, { status: 400 });
+    return badRequest("We couldn't tell which post to open. Please try again.");
   }
 
   const session = await getSession();
@@ -59,13 +64,10 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   const { data: post, error } = await query.single();
 
   if (error || !post) {
-    return NextResponse.json(
-      { error: "Post not found" },
-      { status: 404 }
-    );
+    return notFound("This post is no longer available. It may have been moved or deleted.");
   }
 
-  return NextResponse.json({ post });
+  return ok({ post });
 }
 
 /**
@@ -81,19 +83,19 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   const parsed = postUpdateSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Validation failed", details: parsed.error.flatten() },
-      { status: 400 }
+    return validationFailed(
+      humanizeZodDetails(parsed.error.flatten()),
+      parsed.error.flatten()
     );
   }
 
   const adminClient = createAdminClient();
   const { ipAddress, userAgent } = getRequestContext(req);
 
-  // Fetch current post to detect status transitions
+  // Fetch current post to detect status transitions + snapshot version history
   const { data: existing } = await adminClient
     .from("posts")
-    .select("status, published_at, title")
+    .select("*")
     .eq("id", id)
     .single();
 
@@ -108,12 +110,45 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       user_agent: userAgent,
       metadata: { reason: "Post not found" },
     });
-    return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    return notFound("This post no longer exists.");
+  }
+
+  // Snapshot current revision into post_versions (best-effort; table may not exist pre-migration)
+  try {
+    const existingRow = existing as Record<string, unknown>;
+    const { data: latest } = await adminClient
+      .from("post_versions")
+      .select("version_number")
+      .eq("post_id", id)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextVersion = ((latest as { version_number?: number } | null)?.version_number ?? 0) + 1;
+    const changeSummary =
+      (parsed.data as { change_summary?: string }).change_summary ||
+      `Updated: ${Object.keys(parsed.data).filter((k) => k !== "change_summary").join(", ") || "content"}`;
+    await adminClient.from("post_versions").insert({
+      post_id: id,
+      version_number: nextVersion,
+      title: (existingRow.title as string) ?? "",
+      content: (existingRow.content as string) ?? null,
+      excerpt: (existingRow.excerpt as string) ?? null,
+      tags: (existingRow.tags as string[]) ?? null,
+      post_type: ((existingRow.post_type as string) ?? "article") as never,
+      code_language: (existingRow.code_language as string) ?? null,
+      code_filename: (existingRow.code_filename as string) ?? null,
+      author_id: guard.auth.user.id,
+      change_summary: changeSummary,
+    } as never);
+  } catch {
+    /* versioning is best-effort */
   }
 
   const sanitizedData: Database["public"]["Tables"]["posts"]["Update"] = {
     ...(parsed.data as Database["public"]["Tables"]["posts"]["Update"]),
   };
+  // change_summary is version metadata only, not a posts column
+  delete (sanitizedData as Record<string, unknown>).change_summary;
 
   // Stored XSS Prevention: Sanitize text fields
   if (sanitizedData.title) {
@@ -125,38 +160,81 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   if (sanitizedData.excerpt) {
     sanitizedData.excerpt = sanitizeText(sanitizedData.excerpt);
   }
+  if (sanitizedData.code_filename) {
+    sanitizedData.code_filename = sanitizeText(sanitizedData.code_filename);
+  }
+
+  // Pin bookkeeping: toggling is_pinned maintains pinned_at
+  const existingRec = existing as unknown as {
+    status: string;
+    published_at: string | null;
+    title: string;
+    is_pinned?: boolean;
+  };
+  if (typeof (sanitizedData as Record<string, unknown>).is_pinned === "boolean") {
+    const wantPinned = Boolean((sanitizedData as Record<string, unknown>).is_pinned);
+    if (wantPinned && !existingRec.is_pinned) {
+      (sanitizedData as Record<string, unknown>).pinned_at = new Date().toISOString();
+    } else if (!wantPinned) {
+      (sanitizedData as Record<string, unknown>).pinned_at = null;
+    }
+  }
 
   // If transitioning to published and not yet published, set published_at
   if (
     parsed.data.status === "published" &&
-    existing.status !== "published" &&
-    !existing.published_at
+    existingRec.status !== "published" &&
+    !existingRec.published_at
   ) {
     sanitizedData.published_at = new Date().toISOString();
   }
 
-  const { data: post, error: updateErr } = await adminClient
-    .from("posts")
-    .update(sanitizedData)
-    .eq("id", id)
-    .select()
-    .single();
+  // Strip new columns + retry if DB hasn't migrated yet
+  let post: Record<string, unknown> | null = null;
+  let updateErr: { message: string } | null = null;
+  {
+    const attempt = await adminClient
+      .from("posts")
+      .update(sanitizedData as never)
+      .eq("id", id)
+      .select()
+      .single();
+    post = attempt.data as Record<string, unknown> | null;
+    updateErr = attempt.error as { message: string } | null;
+    if (updateErr && /post_type|code_|is_pinned|pinned_at/i.test(updateErr.message)) {
+      const fallback = { ...sanitizedData } as Record<string, unknown>;
+      delete fallback.post_type;
+      delete fallback.code_language;
+      delete fallback.code_filename;
+      delete fallback.is_pinned;
+      delete fallback.pinned_at;
+      const retry = await adminClient
+        .from("posts")
+        .update(fallback as never)
+        .eq("id", id)
+        .select()
+        .single();
+      post = retry.data as Record<string, unknown> | null;
+      updateErr = retry.error as { message: string } | null;
+    }
+  }
 
-  if (updateErr) {
+  if (updateErr || !post) {
     await logAction({
       actor_user_id: guard.auth.user.id,
       action: AUDIT_ACTIONS.API_ERROR,
       target_type: "post",
       target_id: id,
-      target_name: existing.title,
+      target_name: existingRec.title,
       result: "FAILED",
       ip_address: ipAddress,
       user_agent: userAgent,
-      metadata: { error: updateErr.message },
+      metadata: { error: updateErr?.message ?? "Update failed" },
     });
-    return NextResponse.json(
-      { error: `Update failed: ${updateErr.message}` },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(updateErr, "Couldn't save your changes. Please try again."),
+      500
     );
   }
 
@@ -164,20 +242,20 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     actor_user_id: guard.auth.user.id,
     action: AUDIT_ACTIONS.POST_EDITED,
     target_type: "post",
-    target_id: post.id,
-    target_name: post.title,
+    target_id: (post as { id: string }).id,
+    target_name: (post as { title: string }).title,
     result: "SUCCESS",
     ip_address: ipAddress,
     user_agent: userAgent,
     metadata: {
-      slug: post.slug,
+      slug: (post as { slug?: string }).slug,
       updatedFields: Object.keys(parsed.data),
-      previousStatus: existing.status,
-      newStatus: post.status,
+      previousStatus: existingRec.status,
+      newStatus: (post as { status?: string }).status,
     },
   });
 
-  return NextResponse.json({ post });
+  return ok({ post });
 }
 
 /**
@@ -214,10 +292,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       user_agent: userAgent,
       metadata: { reason: "Post not found or already deleted" },
     });
-    return NextResponse.json(
-      { error: "Post not found or already deleted" },
-      { status: 404 }
-    );
+    return notFound("This post was already deleted or never existed.");
   }
 
   await logAction({
@@ -232,5 +307,5 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     metadata: { slug: post.slug },
   });
 
-  return NextResponse.json({ message: "Post moved to trash", id: post.id });
+  return ok({ message: "Post moved to trash", id: post.id });
 }

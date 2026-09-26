@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, fail } from "@/lib/api/response";
+import { humanizeTechnicalError } from "@/lib/api/human-errors";
 import { logAction } from "@/lib/logging/log-action";
 import { AUDIT_ACTIONS } from "@/types/audit";
 import { getRecentFeed } from "@/lib/feed/recent";
@@ -29,7 +31,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const result = await getRecentFeed({ limit });
-    return NextResponse.json(result);
+    return ok(result);
   } catch (err) {
     await logAction({
       actor_user_id: null,
@@ -40,9 +42,10 @@ export async function GET(req: NextRequest) {
       user_agent: userAgent,
       metadata: { error: err instanceof Error ? err.message : "Unknown error" },
     });
-    return NextResponse.json(
-      { error: "Failed to load feed" },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(err, "The activity feed isn't loading right now. Please try again."),
+      500
     );
   }
 }

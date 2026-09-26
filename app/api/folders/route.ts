@@ -1,4 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, fail, validationFailed, badRequest } from "@/lib/api/response";
+import {
+  humanizeTechnicalError,
+  humanizeZodDetails,
+} from "@/lib/api/human-errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSession } from "@/lib/auth/session";
 import { isAdmin } from "@/lib/auth/roles";
@@ -51,9 +56,10 @@ export async function GET(req: NextRequest) {
   const { data: folders, error } = await query;
 
   if (error) {
-    return NextResponse.json(
-      { error: `Failed to fetch folders: ${error.message}` },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(error, "Couldn't load folders. Please try again."),
+      500
     );
   }
 
@@ -103,7 +109,7 @@ export async function GET(req: NextRequest) {
     childFileCount: childFileCounts[folder.id] || 0,
   }));
 
-  return NextResponse.json({ folders: enriched });
+  return ok({ folders: enriched });
 }
 
 /**
@@ -118,9 +124,9 @@ export async function POST(req: NextRequest) {
   const parsed = folderCreateSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Validation failed", details: parsed.error.flatten() },
-      { status: 400 }
+    return validationFailed(
+      humanizeZodDetails(parsed.error.flatten()),
+      parsed.error.flatten()
     );
   }
 
@@ -139,10 +145,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (!parentFolder) {
-      return NextResponse.json(
-        { error: "Parent folder not found or is not active" },
-        { status: 400 }
-      );
+      return badRequest("The parent folder no longer exists. Please choose another location.");
     }
 
     path = `${parentFolder.path}/${name}`;
@@ -172,9 +175,10 @@ export async function POST(req: NextRequest) {
       user_agent: userAgent,
       metadata: { error: insertErr.message },
     });
-    return NextResponse.json(
-      { error: `Folder creation failed: ${insertErr.message}` },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(insertErr, "Couldn't create that folder. Please try again."),
+      500
     );
   }
 
@@ -190,5 +194,5 @@ export async function POST(req: NextRequest) {
     metadata: { path: folder.path, parentId: parent_id },
   });
 
-  return NextResponse.json({ folder }, { status: 201 });
+  return ok({ folder }, { status: 201 });
 }

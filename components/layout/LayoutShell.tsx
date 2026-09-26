@@ -5,6 +5,7 @@ import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { MobileNav } from "./MobileNav";
 import { SmoothScrollProvider } from "./SmoothScrollProvider";
+import { ToastProvider } from "@/components/ui/Toast";
 
 interface LayoutShellProps {
   children: React.ReactNode;
@@ -71,6 +72,7 @@ export function LayoutShell({ children, userEmail, userRole }: LayoutShellProps)
   }, []);
 
   return (
+    <ToastProvider>
     <SmoothScrollProvider>
       {/* Maintenance Mode Admin Banner */}
       {maintenanceActive && isAdminUser && (
@@ -183,5 +185,6 @@ export function LayoutShell({ children, userEmail, userRole }: LayoutShellProps)
         }
       `}</style>
     </SmoothScrollProvider>
+    </ToastProvider>
   );
 }

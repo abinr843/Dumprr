@@ -15,6 +15,7 @@ import { logAction } from "../../services/audit.service.js";
 import { AUDIT_ACTIONS } from "../../types/index.js";
 import type { UserRole } from "../../types/index.js";
 import { asyncHandler } from "../../middleware/error-handler.js";
+import { humanizeTechnicalError } from "../../utils/api-response.js";
 
 const router = Router();
 
@@ -47,7 +48,7 @@ router.get(
       await admin.auth.admin.listUsers({ perPage: 1000 });
 
     if (authError) {
-      res.status(500).json({ error: `Failed to list users: ${authError.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(authError, "Couldn't load users. Please try again.") });
       return;
     }
 
@@ -159,7 +160,7 @@ router.post(
     });
 
     if (createError) {
-      res.status(500).json({ error: `Failed to create user: ${createError.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(createError, "Couldn't create that user. Please check the email and try again.") });
       return;
     }
 
@@ -301,9 +302,7 @@ router.patch(
         });
 
       if (linkError) {
-        res.status(500).json({
-          error: `Failed to generate recovery link: ${linkError.message}`,
-        });
+        res.status(500).json({ error: humanizeTechnicalError(linkError, "Couldn't create a recovery link. Please try again.") });
         return;
       }
 
@@ -341,7 +340,7 @@ router.patch(
         .eq("id", id);
 
       if (updateErr) {
-        res.status(500).json({ error: `Failed to update user: ${updateErr.message}` });
+        res.status(500).json({ error: humanizeTechnicalError(updateErr, "Couldn't update that user. Please try again.") });
         return;
       }
 
@@ -412,7 +411,7 @@ router.delete(
 
     const { error: deleteError } = await admin.auth.admin.deleteUser(id);
     if (deleteError) {
-      res.status(500).json({ error: `Failed to delete user: ${deleteError.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(deleteError, "Couldn't delete that user. Please try again.") });
       return;
     }
 

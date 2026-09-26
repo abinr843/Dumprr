@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, badRequest, fail } from "@/lib/api/response";
+import { humanizeTechnicalError } from "@/lib/api/human-errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   authenticateAdminApi,
@@ -32,20 +34,14 @@ export async function POST(req: NextRequest) {
   };
 
   if (!action || !["move", "delete"].includes(action)) {
-    return NextResponse.json(
-      { error: "Invalid action. Must be 'move' or 'delete'." },
-      { status: 400 }
-    );
+    return badRequest("Please choose whether to move or delete these items.");
   }
 
   const safeFileIds = Array.isArray(fileIds) ? fileIds.filter(Boolean) : [];
   const safeFolderIds = Array.isArray(folderIds) ? folderIds.filter(Boolean) : [];
 
   if (safeFileIds.length === 0 && safeFolderIds.length === 0) {
-    return NextResponse.json(
-      { error: "No items selected. Provide fileIds and/or folderIds." },
-      { status: 400 }
-    );
+    return badRequest("Please select at least one item to perform this action.");
   }
 
   const admin = createAdminClient();
@@ -69,7 +65,9 @@ export async function POST(req: NextRequest) {
           .is("deleted_at", null);
 
         if (fileErr) {
-          results.errors.push(`Files move failed: ${fileErr.message}`);
+          results.errors.push(
+            `Couldn't move some files. ${humanizeTechnicalError(fileErr, "Please try again.")}`
+          );
         } else {
           results.filesUpdated = count ?? safeFileIds.length;
         }
@@ -93,7 +91,9 @@ export async function POST(req: NextRequest) {
             .is("deleted_at", null);
 
           if (folderErr) {
-            results.errors.push(`Folders move failed: ${folderErr.message}`);
+            results.errors.push(
+              `Couldn't move some folders. ${humanizeTechnicalError(folderErr, "Please try again.")}`
+            );
           } else {
             results.foldersUpdated = count ?? validFolderIds.length;
           }
@@ -136,7 +136,9 @@ export async function POST(req: NextRequest) {
           .is("deleted_at", null);
 
         if (fileErr) {
-          results.errors.push(`Files delete failed: ${fileErr.message}`);
+          results.errors.push(
+            `Couldn't delete some files. ${humanizeTechnicalError(fileErr, "Please try again.")}`
+          );
         } else {
           results.filesUpdated = count ?? safeFileIds.length;
         }
@@ -153,7 +155,9 @@ export async function POST(req: NextRequest) {
           .is("deleted_at", null);
 
         if (folderErr) {
-          results.errors.push(`Folders delete failed: ${folderErr.message}`);
+          results.errors.push(
+            `Couldn't delete some folders. ${humanizeTechnicalError(folderErr, "Please try again.")}`
+          );
         } else {
           results.foldersUpdated = count ?? safeFolderIds.length;
         }
@@ -174,12 +178,26 @@ export async function POST(req: NextRequest) {
       });
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    results.errors.push(msg);
+    results.errors.push(humanizeTechnicalError(err, "Something went wrong. Please try again."));
   }
 
   const status = results.errors.length === 0 ? 200 : 207;
-  return NextResponse.json({
+  const succeeded = results.errors.length === 0;
+  if (!succeeded) {
+    return fail(
+      "BAD_REQUEST",
+      results.errors[0],
+      status,
+      {
+        message:
+          action === "move"
+            ? `Moved ${results.filesUpdated} file(s) and ${results.foldersUpdated} folder(s)`
+            : `Deleted ${results.filesUpdated} file(s) and ${results.foldersUpdated} folder(s) to trash`,
+        results,
+      }
+    );
+  }
+  return ok({
     message:
       action === "move"
         ? `Moved ${results.filesUpdated} file(s) and ${results.foldersUpdated} folder(s)`

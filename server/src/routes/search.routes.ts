@@ -10,6 +10,7 @@ import { authenticateUser, isAdmin } from "../middleware/auth.js";
 import { logAction } from "../services/audit.service.js";
 import { AUDIT_ACTIONS } from "../types/index.js";
 import { asyncHandler } from "../middleware/error-handler.js";
+import { humanizeTechnicalError } from "../utils/api-response.js";
 
 const router = Router();
 
@@ -117,7 +118,7 @@ router.get(
           query: q,
         },
       });
-      res.status(500).json({ error: "Search failed" });
+      res.status(500).json({ error: humanizeTechnicalError(err, "Search isn't working right now. Please try again in a moment.") });
     }
   })
 );

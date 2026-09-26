@@ -23,10 +23,13 @@ import {
   Info,
 } from "lucide-react";
 import Link from "next/link";
+import { normalizeAllowedExtensions } from "@/lib/storage/file-validation";
+import { apiFetch, ApiError } from "@/lib/client/api";
+import { useToast } from "@/components/ui/Toast";
 
 interface SystemSetting {
   key: string;
-  value: string;
+  value: unknown;
   description: string | null;
   is_public: boolean;
 }
@@ -192,6 +195,41 @@ const SECTIONS: { title: string; description: string; icon: React.ReactNode; set
       },
     ],
   },
+  {
+    title: "Posts & Content",
+    description: "Content publishing and interaction settings",
+    icon: <Info size={20} />,
+    settings: [
+      {
+        key: "posts.allow_public_comments",
+        label: "Public Comments",
+        description: "Allow visitors to leave comments on published posts",
+        icon: <Info size={18} />,
+        type: "boolean",
+        defaultValue: "true",
+      },
+    ],
+  },
+  {
+    title: "Appearance",
+    description: "Default UI theme and display preferences",
+    icon: <Info size={20} />,
+    settings: [
+      {
+        key: "ui.default_theme",
+        label: "Default Theme",
+        description: "Fallback theme for new visitors before they set a preference",
+        icon: <Info size={18} />,
+        type: "select",
+        options: [
+          { value: "system", label: "System (follow OS)" },
+          { value: "light", label: "Light" },
+          { value: "dark", label: "Dark" },
+        ],
+        defaultValue: "system",
+      },
+    ],
+  },
 ];
 
 function formatTime(totalSeconds: number): string {
@@ -207,6 +245,7 @@ function formatTime(totalSeconds: number): string {
 // ─── Component ──────────────────────────────────────────────────────
 
 export function AdminSettingsClient() {
+  const toast = useToast();
   const [settings, setSettings] = useState<SystemSetting[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -221,52 +260,26 @@ export function AdminSettingsClient() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/settings");
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `Failed to fetch settings (HTTP ${res.status})`);
+      const data = await apiFetch<{ settings: SystemSetting[] }>("/api/admin/settings");
       setSettings(data.settings || []);
       const vals: Record<string, string> = {};
       for (const s of data.settings || []) {
-        vals[s.key] = s.value;
+        vals[s.key] = String(s.value ?? "");
       }
       setEditValues(vals);
       setHasChanges(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch settings");
+      const msg = err instanceof Error ? err.message : "Failed to fetch settings";
+      setError(msg);
+      toast.error("Couldn't load settings", { description: msg });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
-    let active = true;
-    async function init() {
-      try {
-        const res = await fetch("/api/admin/settings");
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || "Failed to fetch settings");
-        }
-        const data = await res.json();
-        if (active) {
-          setSettings(data.settings || []);
-          const vals: Record<string, string> = {};
-          for (const s of data.settings || []) {
-            vals[s.key] = s.value;
-          }
-          setEditValues(vals);
-          setLoading(false);
-        }
-      } catch (err) {
-        if (active) {
-          setError(err instanceof Error ? err.message : "Failed to fetch settings");
-          setLoading(false);
-        }
-      }
-    }
-    init();
-    return () => { active = false; };
-  }, []);
+    fetchSettings();
+  }, [fetchSettings]);
 
   const updateValue = (key: string, value: string) => {
     setEditValues((prev) => ({ ...prev, [key]: value }));
@@ -283,16 +296,18 @@ export function AdminSettingsClient() {
       for (const cfg of section.settings) {
         const current = editValues[cfg.key];
         const original = settings.find((s) => s.key === cfg.key)?.value;
-        if (current === undefined || current === original) continue;
+        if (current === undefined || String(current) === String(original)) continue;
 
         if (cfg.type === "boolean") {
           updates[cfg.key] = current === "true";
         } else if (cfg.type === "number") {
-          const stored = cfg.storeConvert ? cfg.storeConvert(current) : current;
-          const num = parseFloat(stored);
+          const num = parseFloat(current);
           if (!isNaN(num)) updates[cfg.key] = num;
         } else if (cfg.type === "select") {
           updates[cfg.key] = current.replace(/"/g, "");
+        } else if (cfg.key === "storage.allowed_file_types") {
+          const norm = normalizeAllowedExtensions(current);
+          updates[cfg.key] = norm === "*" ? "*" : norm.join(", ");
         } else {
           updates[cfg.key] = current.replace(/"/g, "");
         }
@@ -307,15 +322,21 @@ export function AdminSettingsClient() {
     }
 
     try {
-      const res = await fetch("/api/admin/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ settings: updates }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok && res.status !== 207) {
-        throw new Error(data.error || `Failed to save (HTTP ${res.status})`);
-      }
+      const data = await toast.promise(
+        apiFetch<{ message: string; results?: { key: string; success: boolean; error?: string }[] }>(
+          "/api/admin/settings",
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ settings: updates }),
+          }
+        ),
+        {
+          loading: "Saving settings…",
+          success: "Settings updated!",
+          error: (e) => (e instanceof Error ? e.message : "Couldn't save settings"),
+        }
+      );
 
       // Check if maintenance mode was toggled
       if ("app.maintenance_mode" in updates) {
@@ -328,7 +349,15 @@ export function AdminSettingsClient() {
       fetchSettings();
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save settings");
+      // toast.promise already toasted; enrich the persistent banner with
+      // per-setting failures from partial (207) responses when available.
+      let msg = err instanceof Error ? err.message : "Failed to save settings";
+      const details = err instanceof ApiError ? (err.details as { results?: { key: string; success: boolean; error?: string }[] } | undefined) : undefined;
+      const failed = (details?.results || []).filter((r) => !r.success);
+      if (failed.length > 0) {
+        msg = `Some settings couldn't be saved (${failed.map((r) => r.key).join(", ")}). ${failed[0]?.error || "Please review them and try again."}`;
+      }
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -336,24 +365,32 @@ export function AdminSettingsClient() {
 
   const getDisplayValue = (cfg: SettingConfig): string => {
     const raw = editValues[cfg.key] ?? cfg.defaultValue;
-    const clean = raw.replace(/^"|"$/g, "");
+    // Safely convert to string — handles booleans, numbers, and already-string values
+    const str = String(raw);
+    const clean = str.replace(/^"|"$/g, "");
     if (cfg.displayConvert) return cfg.displayConvert(clean);
     return clean;
   };
 
-  const isMaintenanceOn = (editValues["app.maintenance_mode"] ?? "false").replace(/"/g, "") === "true";
+  const isMaintenanceOn = String(editValues["app.maintenance_mode"] ?? "false").replace(/"/g, "") === "true";
 
   const activateMaintenanceMode = async () => {
     setSaving(true);
     setError(null);
     setSuccess(null);
     try {
-      const res = await fetch("/api/admin/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ settings: { "app.maintenance_mode": true } }),
-      });
-      if (!res.ok) throw new Error("Failed to activate maintenance mode");
+      await toast.promise(
+        apiFetch("/api/admin/settings", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ settings: { "app.maintenance_mode": true } }),
+        }),
+        {
+          loading: "Activating maintenance mode…",
+          success: "Maintenance mode activated",
+          error: (e) => (e instanceof Error ? e.message : "Couldn't activate maintenance mode"),
+        }
+      );
       if (typeof window !== "undefined") {
         localStorage.setItem("dumpr_maintenance_started_at", String(Date.now()));
       }
@@ -372,12 +409,18 @@ export function AdminSettingsClient() {
     setError(null);
     setSuccess(null);
     try {
-      const res = await fetch("/api/admin/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ settings: { "app.maintenance_mode": false } }),
-      });
-      if (!res.ok) throw new Error("Failed to deactivate maintenance mode");
+      await toast.promise(
+        apiFetch("/api/admin/settings", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ settings: { "app.maintenance_mode": false } }),
+        }),
+        {
+          loading: "Deactivating maintenance mode…",
+          success: "Site is live again",
+          error: (e) => (e instanceof Error ? e.message : "Couldn't deactivate maintenance mode"),
+        }
+      );
       if (typeof window !== "undefined") {
         localStorage.removeItem("dumpr_maintenance_started_at");
       }
@@ -643,12 +686,36 @@ export function AdminSettingsClient() {
                           {cfg.unit && <span className="settings-unit">{cfg.unit}</span>}
                         </div>
                       ) : (
-                        <input
-                          type="text"
-                          className="settings-input settings-input-wide"
-                          value={getDisplayValue(cfg)}
-                          onChange={(e) => updateValue(cfg.key, e.target.value)}
-                        />
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", width: "100%", maxWidth: 360 }}>
+                          <input
+                            type="text"
+                            className="settings-input settings-input-wide"
+                            placeholder={cfg.key === "storage.allowed_file_types" ? "e.g. * (all) or html, pdf, png" : undefined}
+                            value={getDisplayValue(cfg)}
+                            onChange={(e) => updateValue(cfg.key, e.target.value)}
+                          />
+                          {cfg.key === "storage.allowed_file_types" && (() => {
+                            const norm = normalizeAllowedExtensions(getDisplayValue(cfg));
+                            return (
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+                                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Parsed:</span>
+                                {norm === "*" ? (
+                                  <span style={{ fontSize: "11px", padding: "1px 6px", borderRadius: 4, background: "rgba(16, 185, 129, 0.15)", color: "#10b981", fontWeight: 600 }}>
+                                    All file types allowed (*)
+                                  </span>
+                                ) : norm.length === 0 ? (
+                                  <span style={{ fontSize: "11px", color: "#f59e0b" }}>None</span>
+                                ) : (
+                                  norm.map((e) => (
+                                    <span key={e} style={{ fontSize: "11px", padding: "1px 6px", borderRadius: 4, background: "rgba(99, 102, 241, 0.15)", color: "var(--color-primary)", fontWeight: 600 }}>
+                                      .{e}
+                                    </span>
+                                  ))
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -673,7 +740,7 @@ export function AdminSettingsClient() {
               {settings.map((s) => (
                 <tr key={s.key}>
                   <td style={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{s.key}</td>
-                  <td style={{ fontWeight: 500 }}>{s.value}</td>
+                  <td style={{ fontWeight: 500 }}>{String(s.value ?? "")}</td>
                   <td style={{ color: "var(--text-secondary)" }}>{s.description || "—"}</td>
                 </tr>
               ))}

@@ -23,6 +23,7 @@ import { validateFile, canAcceptFile } from "../services/storage.service.js";
 import { sanitizeFilename } from "../services/security.service.js";
 import { AUDIT_ACTIONS } from "../types/index.js";
 import { asyncHandler } from "../middleware/error-handler.js";
+import { humanizeTechnicalError } from "../utils/api-response.js";
 
 const router = Router();
 
@@ -84,7 +85,7 @@ router.get(
         user_agent: req.userAgent || "unknown",
         metadata: { error: error.message },
       });
-      res.status(500).json({ error: `Failed to fetch files: ${error.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(error, "Couldn't load files. Please try again.") });
       return;
     }
 
@@ -202,7 +203,7 @@ router.post(
         user_agent: ua,
         metadata: { error: uploadError.message },
       });
-      res.status(500).json({ error: `Upload failed: ${uploadError.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(uploadError, "We couldn't store your file. Please try again in a moment.") });
       return;
     }
 
@@ -237,7 +238,7 @@ router.post(
         user_agent: ua,
         metadata: { error: insertError.message, stage: "database_insert" },
       });
-      res.status(500).json({ error: `Database insert failed: ${insertError.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(insertError, "We couldn't save your file record. Please try again.") });
       return;
     }
 
@@ -355,7 +356,7 @@ router.patch(
       .single();
 
     if (updateErr) {
-      res.status(500).json({ error: `Update failed: ${updateErr.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(updateErr, "Couldn't update this file. Please try again.") });
       return;
     }
 
@@ -417,7 +418,7 @@ router.delete(
       .single();
 
     if (updateErr) {
-      res.status(500).json({ error: `Soft delete failed: ${updateErr.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(updateErr, "Couldn't move this file to trash. Please try again.") });
       return;
     }
 
@@ -476,7 +477,7 @@ router.post(
       .single();
 
     if (updateErr) {
-      res.status(500).json({ error: `Restore failed: ${updateErr.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(updateErr, "Couldn't restore this file. Please try again.") });
       return;
     }
 
@@ -524,7 +525,7 @@ router.delete(
         .remove([file.storage_path]);
 
       if (removeErr) {
-        res.status(500).json({ error: `Storage removal failed: ${removeErr.message}` });
+        res.status(500).json({ error: humanizeTechnicalError(removeErr, "Couldn't delete the stored file. Please try again.") });
         return;
       }
     }
@@ -532,7 +533,7 @@ router.delete(
     const { error: deleteErr } = await admin.from("files").delete().eq("id", id);
 
     if (deleteErr) {
-      res.status(500).json({ error: `Database deletion failed: ${deleteErr.message}` });
+      res.status(500).json({ error: humanizeTechnicalError(deleteErr, "Couldn't delete this file's record. Please try again.") });
       return;
     }
 

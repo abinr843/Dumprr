@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, notFound, fail, conflict } from "@/lib/api/response";
+import { humanizeTechnicalError } from "@/lib/api/human-errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   authenticateAdminApi,
@@ -41,14 +43,11 @@ export async function POST(req: NextRequest, context: RouteContext) {
       user_agent: userAgent,
       metadata: { reason: "File not found" },
     });
-    return NextResponse.json({ error: "File not found" }, { status: 404 });
+    return notFound("This file no longer exists.");
   }
 
   if (existing.status !== "trash") {
-    return NextResponse.json(
-      { error: "File is not in trash" },
-      { status: 409 }
-    );
+    return conflict("This file isn't in trash, so there's nothing to restore.");
   }
 
   const { data: restored, error: updateErr } = await adminClient
@@ -74,9 +73,10 @@ export async function POST(req: NextRequest, context: RouteContext) {
       user_agent: userAgent,
       metadata: { error: updateErr.message },
     });
-    return NextResponse.json(
-      { error: `Restore failed: ${updateErr.message}` },
-      { status: 500 }
+    return fail(
+      "INTERNAL_ERROR",
+      humanizeTechnicalError(updateErr, "Couldn't restore this file. Please try again."),
+      500
     );
   }
 
@@ -91,5 +91,5 @@ export async function POST(req: NextRequest, context: RouteContext) {
     user_agent: userAgent,
   });
 
-  return NextResponse.json({ file: restored, message: "File restored" });
+  return ok({ file: restored, message: "File restored" });
 }

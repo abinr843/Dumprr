@@ -7,7 +7,6 @@ import {
   Pencil,
   Trash2,
   RotateCcw,
-  ExternalLink,
   MoreVertical,
   Loader2,
   Eye,
@@ -15,10 +14,16 @@ import {
   Archive,
   Send,
   AlertTriangle,
+  Pin,
+  PinOff,
+  Code,
 } from "lucide-react";
 import { PostEditorModal } from "./PostEditorModal";
 import { PostDetailModal } from "./PostDetailModal";
 import { ActionContextMenu } from "@/components/storage/ActionContextMenu";
+import { BookmarkButton } from "@/components/bookmarks/BookmarkButton";
+import { apiFetch } from "@/lib/client/api";
+import { toast } from "@/components/ui/Toast";
 import type { PostRecord, PostWithAuthor } from "@/types/posts";
 
 interface PostsManagerProps {
@@ -65,6 +70,27 @@ export function PostsManager({ isAdmin, initialPosts }: PostsManagerProps) {
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   const hydratedRef = useRef(!!initialPosts);
 
+  // Deep-link support: /posts?post=<id> auto-opens the reader (related links, recents)
+  useEffect(() => {
+    try {
+      const pid = new URLSearchParams(window.location.search).get("post");
+      if (!pid) return;
+      const known = (initialPosts || []).find((p) => p.id === pid);
+      if (known) {
+        setViewPost(known);
+        return;
+      }
+      fetch(`/api/posts/${pid}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d?.post) setViewPost(d.post);
+        })
+        .catch(() => {});
+    } catch {
+      /* noop */
+    }
+  }, [initialPosts]);
+
   const fetchPosts = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
@@ -94,30 +120,82 @@ export function PostsManager({ isAdmin, initialPosts }: PostsManagerProps) {
 
   const handleDelete = async (postId: string) => {
     if (!confirm("Move this post to trash?")) return;
-    await fetch(`/api/posts/${postId}`, { method: "DELETE" });
-    fetchPosts();
+    try {
+      await apiFetch(`/api/posts/${postId}`, { method: "DELETE" });
+      toast.success("Post moved to trash");
+      fetchPosts();
+    } catch (err) {
+      toast.error("Couldn't move post to trash", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
   };
 
   const handleRestore = async (postId: string) => {
-    await fetch(`/api/posts/${postId}/restore`, { method: "POST" });
-    fetchPosts();
+    try {
+      await apiFetch(`/api/posts/${postId}/restore`, { method: "POST" });
+      toast.success("Post restored");
+      fetchPosts();
+    } catch (err) {
+      toast.error("Couldn't restore post", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
   };
 
   const handlePermanentDelete = async (postId: string) => {
     if (!confirm("Permanently delete this post? This cannot be undone.")) return;
-    await fetch(`/api/posts/${postId}/permanent`, { method: "DELETE" });
-    fetchPosts();
+    try {
+      await apiFetch(`/api/posts/${postId}/permanent`, { method: "DELETE" });
+      toast.success("Post permanently deleted");
+      fetchPosts();
+    } catch (err) {
+      toast.error("Couldn't delete post", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
   };
 
   const handleStatusChange = async (postId: string, status: string) => {
-    await fetch(`/api/posts/${postId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    setActionMenuId(null);
-    fetchPosts();
+    try {
+      await apiFetch(`/api/posts/${postId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      setActionMenuId(null);
+      fetchPosts();
+      toast.success(status === "published" ? "Post published!" : `Post moved to ${status}`);
+    } catch (err) {
+      toast.error("Couldn't update post", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
   };
+
+  const handlePinToggle = async (post: PostWithAuthor) => {
+    const rec = post as unknown as { is_pinned?: boolean };
+    try {
+      await apiFetch(`/api/posts/${post.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_pinned: !rec.is_pinned }),
+      });
+      setActionMenuId(null);
+      fetchPosts();
+      toast.success(rec.is_pinned ? "Post unpinned" : "Post pinned to top");
+    } catch (err) {
+      toast.error("Couldn't change pin", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
+  const sortedPosts = [...posts].sort((a, b) => {
+    const ap = (a as unknown as { is_pinned?: boolean }).is_pinned ? 1 : 0;
+    const bp = (b as unknown as { is_pinned?: boolean }).is_pinned ? 1 : 0;
+    return bp - ap;
+  });
 
   const tabs: { key: PostTab; label: string; icon: React.ReactNode }[] = [
     { key: "published", label: "Published", icon: <Eye size={14} /> },
@@ -190,16 +268,28 @@ export function PostsManager({ isAdmin, initialPosts }: PostsManagerProps) {
               )}
             </div>
           ) : (
-            posts.map((post) => (
+            sortedPosts.map((post) => {
+              const rec = post as unknown as { is_pinned?: boolean; post_type?: string; code_language?: string | null };
+              const pinned = Boolean(rec.is_pinned);
+              const isCode = rec.post_type === "code";
+              return (
               <div
                 key={post.id}
-                className="post-card"
+                className={`post-card ${pinned ? "pinned" : ""}`}
                 onClick={() => setViewPost(post)}
               >
                 <div className="post-card-main">
                   <div className="post-card-status-dot" style={{ background: STATUS_COLORS[post.status] || "var(--text-muted)" }} />
                   <div className="post-card-info">
-                    <h3 className="post-card-title">{post.title}</h3>
+                    <h3 className="post-card-title">
+                      {pinned && <Pin size={13} className="inline-pin" />}
+                      {isCode && <Code size={13} className="inline-code" />}
+                      {post.title}
+                    </h3>
+                    {pinned && <span className="pinned-tag">📌 Pinned</span>}
+                    {isCode && rec.code_language && (
+                      <span className="code-tag">{rec.code_language}</span>
+                    )}
                     {post.excerpt && (
                       <p className="post-card-excerpt">{post.excerpt}</p>
                     )}
@@ -208,7 +298,7 @@ export function PostsManager({ isAdmin, initialPosts }: PostsManagerProps) {
                       {post.tags && post.tags.length > 0 && (
                         <span className="post-card-tags">
                           {post.tags.slice(0, 3).map((t) => (
-                            <span key={t} className="post-tag">{t}</span>
+                            <span key={t} className="post-tag">#{t}</span>
                           ))}
                         </span>
                       )}
@@ -216,8 +306,10 @@ export function PostsManager({ isAdmin, initialPosts }: PostsManagerProps) {
                   </div>
                 </div>
 
-                {isAdmin && (
-                  <div className="post-card-actions" onClick={(e) => e.stopPropagation()}>
+                <div className="post-card-actions" onClick={(e) => e.stopPropagation()}>
+                  <BookmarkButton itemType="post" itemId={post.id} />
+                  {isAdmin && (
+                    <>
                     {activeTab === "trash" ? (
                       <>
                         <button className="post-action-btn" title="Restore" onClick={() => handleRestore(post.id)}>
@@ -229,6 +321,13 @@ export function PostsManager({ isAdmin, initialPosts }: PostsManagerProps) {
                       </>
                     ) : (
                       <>
+                        <button
+                          className={`post-action-btn ${pinned ? "pinned-on" : ""}`}
+                          title={pinned ? "Unpin" : "Pin to top"}
+                          onClick={() => handlePinToggle(post)}
+                        >
+                          {pinned ? <PinOff size={15} /> : <Pin size={15} />}
+                        </button>
                         <button className="post-action-btn" title="Edit" onClick={() => { setEditingPost(post); setEditorOpen(true); }}>
                           <Pencil size={15} />
                         </button>
@@ -247,10 +346,12 @@ export function PostsManager({ isAdmin, initialPosts }: PostsManagerProps) {
                         />
                       </>
                     )}
-                  </div>
-                )}
+                    </>
+                  )}
+                </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -399,6 +500,42 @@ export function PostsManager({ isAdmin, initialPosts }: PostsManagerProps) {
           box-shadow: var(--shadow-sm);
           transform: translateY(-1px);
         }
+        .post-card.pinned {
+          border-color: rgba(16,185,129,0.55);
+          box-shadow: 0 0 0 1px rgba(16,185,129,0.35), 0 0 22px rgba(16,185,129,0.12);
+        }
+        .pinned-tag {
+          display: inline-block;
+          font-size: 11px;
+          font-weight: 700;
+          color: #10b981;
+          background: rgba(16,185,129,0.12);
+          border: 1px solid rgba(16,185,129,0.35);
+          padding: 1px 8px;
+          border-radius: 9999px;
+          margin: 2px 0 4px;
+        }
+        .code-tag {
+          display: inline-block;
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--color-primary);
+          background: rgba(99,102,241,0.12);
+          padding: 1px 7px;
+          border-radius: 9999px;
+          margin: 2px 0 4px 6px;
+        }
+        .post-card-title :global(.inline-pin),
+        .post-card-title :global(.inline-code) {
+          display: inline;
+          vertical-align: -2px;
+          margin-right: 6px;
+          color: #10b981;
+        }
+        .post-card-title :global(.inline-code) { color: var(--color-primary); }
+        .post-action-btn.pinned-on { color: #10b981; }
         .post-card-main {
           display: flex;
           align-items: flex-start;
