@@ -120,47 +120,52 @@ export async function PATCH(req: NextRequest) {
     (currentRows || []).map((r) => [r.key, normalizeValue(r.value)])
   );
 
+  // --- Pass 1: Validate all settings, accumulate payloads ---
+  const validPayloads: Array<{ key: string; value: string; updated_by: string; updated_at: string }> = [];
+
   for (const [key, value] of Object.entries(updates)) {
-    // Validate key is editable
     const validator = EDITABLE_SETTINGS[key];
     if (!validator) {
       results.push({ key, success: false, error: `This setting can't be changed here.` });
       continue;
     }
 
-    // Validate value type
     if (!validator(value)) {
       results.push({ key, success: false, error: `That value isn't valid for this setting. Please check the expected format.` });
       continue;
     }
 
-    // Upsert the setting — store the value directly as JSONB.
     let valueToStore = value;
     if (key === "storage.allowed_file_types" && typeof value === "string") {
       const normalized = normalizeAllowedExtensions(value);
       valueToStore = normalized === "*" ? "*" : normalized.join(", ");
     }
 
+    validPayloads.push({
+      key,
+      value: JSON.stringify(valueToStore),
+      updated_by: guard.auth.user.id,
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  // --- Pass 2: Single bulk upsert for all valid settings ---
+  if (validPayloads.length > 0) {
     const { error: upsertError } = await admin
       .from("system_settings")
-      .upsert({
-        key,
-        value: JSON.stringify(valueToStore),
-        updated_by: guard.auth.user.id,
-        updated_at: new Date().toISOString(),
-      });
+      .upsert(validPayloads, { onConflict: "key" });
 
     if (upsertError) {
-      results.push({
-        key,
-        success: false,
-        error: humanizeTechnicalError(upsertError, "Couldn't save this setting. Please try again."),
-      });
+      const msg = humanizeTechnicalError(upsertError, "Couldn't save settings. Please try again.");
+      for (const p of validPayloads) {
+        results.push({ key: p.key, success: false, error: msg });
+      }
     } else {
-      results.push({ key, success: true });
-
+      for (const p of validPayloads) {
+        results.push({ key: p.key, success: true });
+      }
       // Immediately invalidate maintenance cache when toggled
-      if (key === "app.maintenance_mode") {
+      if (validPayloads.some((p) => p.key === "app.maintenance_mode")) {
         invalidateMaintenanceCache();
       }
     }

@@ -357,6 +357,19 @@ export interface Database {
         };
         Returns: void;
       };
+      get_all_descendant_folder_ids: {
+        Args: {
+          root_id: string;
+        };
+        Returns: { id: string }[];
+      };
+      get_descendant_folder_ids_by_status: {
+        Args: {
+          root_id: string;
+          status_filter: string;
+        };
+        Returns: { id: string }[];
+      };
     };
     Enums: {
       user_role: UserRole;

@@ -260,19 +260,19 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     );
   }
 
-  for (const evt of auditEvents) {
-    await logAction({
+  await logAction(
+    auditEvents.map((evt) => ({
       actor_user_id: guard.auth.user.id,
       action: evt.action,
-      target_type: "folder",
+      target_type: "folder" as const,
       target_id: id,
       target_name: updated.name,
-      result: "SUCCESS",
+      result: "SUCCESS" as const,
       ip_address: ipAddress,
       user_agent: userAgent,
       metadata: evt.metadata,
-    });
-  }
+    }))
+  );
 
   return ok({ folder: updated });
 }

@@ -67,35 +67,23 @@ async function isDescendantOf(
   return false;
 }
 
+/**
+ * Fetch all descendant folder IDs using a PostgreSQL recursive CTE.
+ * Single DB round-trip regardless of tree depth.
+ */
 async function collectDescendantIds(
   adminClient: any,
   parentId: string,
   statusFilter?: string
 ): Promise<string[]> {
-  let query = adminClient
-    .from("folders")
-    .select("id")
-    .eq("parent_id", parentId);
+  const rpcName = statusFilter
+    ? "get_descendant_folder_ids_by_status"
+    : "get_all_descendant_folder_ids";
+  const params: Record<string, string> = { root_id: parentId };
+  if (statusFilter) params.status_filter = statusFilter;
 
-  if (statusFilter) {
-    query = query.eq("status", statusFilter);
-  } else {
-    query = query.neq("status", "trash");
-  }
-
-  const { data: children } = await query;
-  if (!children || children.length === 0) return [];
-
-  const ids: string[] = children.map((c: any) => c.id);
-  for (const child of children) {
-    const grandchildren = await collectDescendantIds(
-      adminClient,
-      child.id,
-      statusFilter
-    );
-    ids.push(...grandchildren);
-  }
-  return ids;
+  const { data } = await adminClient.rpc(rpcName, params);
+  return (data || []).map((r: any) => r.id);
 }
 
 // ─── GET /api/folders ───────────────────────────────────────────────
@@ -395,19 +383,19 @@ router.patch(
       return;
     }
 
-    for (const evt of auditEvents) {
-      await logAction({
+    await logAction(
+      auditEvents.map((evt: any) => ({
         actor_user_id: req.user!.id,
         action: evt.action,
-        target_type: "folder",
+        target_type: "folder" as const,
         target_id: id,
         target_name: updated.name,
-        result: "SUCCESS",
+        result: "SUCCESS" as const,
         ip_address: ip,
         user_agent: ua,
         metadata: evt.metadata,
-      });
-    }
+      }))
+    );
 
     res.json({ folder: updated });
   })
@@ -563,23 +551,8 @@ router.delete(
       return;
     }
 
-    // Collect ALL descendants (regardless of status)
-    async function collectAll(parentId: string): Promise<string[]> {
-      const { data: children } = await admin
-        .from("folders")
-        .select("id")
-        .eq("parent_id", parentId);
-
-      if (!children || children.length === 0) return [];
-      const ids: string[] = children.map((c: any) => c.id);
-      for (const child of children) {
-        const grandchildren = await collectAll(child.id);
-        ids.push(...grandchildren);
-      }
-      return ids;
-    }
-
-    const descendantFolderIds = await collectAll(id);
+    // Collect ALL descendants via a single recursive CTE query
+    const descendantFolderIds = await collectDescendantIds(admin, id);
     const allFolderIds = [id, ...descendantFolderIds];
 
     const { data: filesToDelete } = await admin

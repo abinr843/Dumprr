@@ -62,24 +62,25 @@ router.patch(
     }
 
     const admin = createAdminClient();
+    // Build all payloads first, then upsert in a single bulk call
+    const payloads = Object.entries(updates).map(([key, value]) => ({
+      key,
+      value: String(value),
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error } = await admin
+      .from("system_settings")
+      .upsert(payloads, { onConflict: "key" });
+
     const results: Record<string, string> = {};
-
-    for (const [key, value] of Object.entries(updates)) {
-      const { error } = await admin
-        .from("system_settings")
-        .upsert(
-          {
-            key,
-            value: String(value),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "key" }
-        );
-
-      if (error) {
-        results[key] = `FAILED: ${error.message}`;
-      } else {
-        results[key] = "updated";
+    if (error) {
+      for (const p of payloads) {
+        results[p.key] = `FAILED: ${error.message}`;
+      }
+    } else {
+      for (const p of payloads) {
+        results[p.key] = "updated";
       }
     }
 

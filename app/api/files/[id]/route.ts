@@ -164,20 +164,20 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     );
   }
 
-  // Log all audit events
-  for (const evt of auditEvents) {
-    await logAction({
+  // Log all audit events (single bulk insert)
+  await logAction(
+    auditEvents.map((evt) => ({
       actor_user_id: guard.auth.user.id,
       action: evt.action,
-      target_type: "file",
+      target_type: "file" as const,
       target_id: id,
       target_name: updated.display_name || updated.name,
-      result: "SUCCESS",
+      result: "SUCCESS" as const,
       ip_address: ipAddress,
       user_agent: userAgent,
       metadata: evt.metadata,
-    });
-  }
+    }))
+  );
 
   return ok({ file: updated });
 }

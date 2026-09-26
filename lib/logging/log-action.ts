@@ -92,67 +92,78 @@ function extractRequestContext(req?: Request | { headers: Headers }) {
 }
 
 /**
+ * Build a sanitized audit log row from a LogActionParams object.
+ * Extracted so both single and batch paths share the same logic.
+ */
+function buildAuditRow(params: LogActionParams) {
+  const rawMetadata: Record<string, unknown> = {
+    ...(params.metadata ?? {}),
+    target_name: params.target_name ?? undefined,
+    result: params.result,
+    timestamp: new Date().toISOString(),
+  };
+
+  const safeMetadata = redactSensitiveData(rawMetadata);
+
+  // Remove undefined values from metadata
+  for (const key of Object.keys(safeMetadata)) {
+    if (safeMetadata[key] === undefined) {
+      delete safeMetadata[key];
+    }
+  }
+
+  return {
+    actor_id: params.actor_user_id ?? null,
+    action: params.action,
+    entity_type: params.target_type,
+    entity_id: params.target_id ?? null,
+    ip_address: params.ip_address ?? null,
+    user_agent: params.user_agent ?? null,
+    metadata: safeMetadata,
+  };
+}
+
+/**
  * Centralised audit logging function for the DUMPR platform.
  *
- * This is the single, canonical entry point for recording audit trail events.
- * All new endpoints should use this function instead of the per-domain helpers
- * (logFileEvent, logPostEvent, logAuthEvent) which remain for backward compatibility.
+ * Accepts a **single event** or an **array of events**. When given an array
+ * all rows are inserted in a single bulk INSERT — eliminating the N+1 trap
+ * that occurs when callers loop and await logAction individually.
  *
  * Guarantees:
  * - Never throws — logging failures are swallowed and console-logged.
  * - Recursively redacts sensitive data (passwords, tokens, signed URLs).
  * - Uses the admin/service-role Supabase client to bypass RLS.
- * - Compatible with the existing audit_logs schema (maps target_name and result
- *   into the metadata JSONB field for forward-compatibility).
+ * - Compatible with the existing audit_logs schema.
  */
-export async function logAction(params: LogActionParams): Promise<void> {
+export async function logAction(
+  params: LogActionParams | LogActionParams[]
+): Promise<void> {
   try {
     const adminClient = createAdminClient();
+    const events = Array.isArray(params) ? params : [params];
 
-    // Auto-extract IP & UA if a request object was not provided explicitly
-    // but they were omitted in the params
-    const ip = params.ip_address ?? null;
-    const ua = params.user_agent ?? null;
+    if (events.length === 0) return;
 
-    // Redact sensitive data from metadata
-    const rawMetadata: Record<string, unknown> = {
-      ...(params.metadata ?? {}),
-      target_name: params.target_name ?? undefined,
-      result: params.result,
-      timestamp: new Date().toISOString(),
-    };
+    const rows = events.map(buildAuditRow);
 
-    const safeMetadata = redactSensitiveData(rawMetadata);
-
-    // Remove undefined values from metadata
-    for (const key of Object.keys(safeMetadata)) {
-      if (safeMetadata[key] === undefined) {
-        delete safeMetadata[key];
-      }
-    }
-
-    const { error } = await adminClient.from("audit_logs").insert({
-      actor_id: params.actor_user_id ?? null,
-      action: params.action,
-      entity_type: params.target_type,
-      entity_id: params.target_id ?? null,
-      ip_address: ip,
-      user_agent: ua,
-      metadata: safeMetadata,
-    });
+    const { error } = await adminClient.from("audit_logs").insert(rows);
 
     if (error) {
       logger.error("logAction: Failed to write audit log", {
         error: error.message,
-        action: params.action,
-        result: params.result,
+        count: rows.length,
+        actions: events.map((e) => e.action),
       });
     }
   } catch (err) {
     // Audit logging must NEVER crash the main request flow
+    const actions = Array.isArray(params)
+      ? params.map((p) => p.action)
+      : [params.action];
     logger.error("logAction: Exception during audit logging", {
       error: err instanceof Error ? err.message : String(err),
-      action: params.action,
+      actions,
     });
   }
 }

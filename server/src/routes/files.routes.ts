@@ -360,19 +360,19 @@ router.patch(
       return;
     }
 
-    for (const evt of auditEvents) {
-      await logAction({
+    await logAction(
+      auditEvents.map((evt: any) => ({
         actor_user_id: req.user!.id,
         action: evt.action,
-        target_type: "file",
+        target_type: "file" as const,
         target_id: id,
         target_name: updated.display_name || updated.name,
-        result: "SUCCESS",
+        result: "SUCCESS" as const,
         ip_address: ip,
         user_agent: ua,
         metadata: evt.metadata,
-      });
-    }
+      }))
+    );
 
     res.json({ file: updated });
   })

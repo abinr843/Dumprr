@@ -39,27 +39,12 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     return notFound("This folder no longer exists.");
   }
 
-  // Collect all descendant folder IDs
-  async function collectAllDescendantIds(
-    parentId: string
-  ): Promise<string[]> {
-    const { data: children } = await adminClient
-      .from("folders")
-      .select("id")
-      .eq("parent_id", parentId);
-
-    if (!children || children.length === 0) return [];
-
-    const ids: string[] = children.map((c: any) => c.id);
-    for (const child of children) {
-      const grandchildren = await collectAllDescendantIds(child.id);
-      ids.push(...grandchildren);
-    }
-    return ids;
-  }
-
-  const descendantFolderIds = await collectAllDescendantIds(id);
-  const allFolderIds = [id, ...descendantFolderIds];
+  // Collect all descendant folder IDs via a single recursive CTE query
+  const { data: descendantRows } = await adminClient.rpc(
+    "get_all_descendant_folder_ids",
+    { root_id: id }
+  );
+  const allFolderIds = [id, ...(descendantRows || []).map((r: any) => r.id)];
 
   // Find all files in these folders
   const { data: filesToDelete } = await adminClient

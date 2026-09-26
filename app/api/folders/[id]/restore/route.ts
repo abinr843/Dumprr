@@ -44,28 +44,12 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
   const now = new Date().toISOString();
 
-  // Collect all descendant folder IDs that were trashed
-  async function collectTrashedDescendantIds(
-    parentId: string
-  ): Promise<string[]> {
-    const { data: children } = await adminClient
-      .from("folders")
-      .select("id")
-      .eq("parent_id", parentId)
-      .eq("status", "trash");
-
-    if (!children || children.length === 0) return [];
-
-    const ids: string[] = children.map((c: any) => c.id);
-    for (const child of children) {
-      const grandchildren = await collectTrashedDescendantIds(child.id);
-      ids.push(...grandchildren);
-    }
-    return ids;
-  }
-
-  const descendantFolderIds = await collectTrashedDescendantIds(id);
-  const allFolderIds = [id, ...descendantFolderIds];
+  // Collect all trashed descendant folder IDs via a single recursive CTE query
+  const { data: descendantRows } = await adminClient.rpc(
+    "get_descendant_folder_ids_by_status",
+    { root_id: id, status_filter: "trash" }
+  );
+  const allFolderIds = [id, ...(descendantRows || []).map((r: any) => r.id)];
 
   // Restore all folders in the tree
   await adminClient
